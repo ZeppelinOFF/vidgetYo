@@ -39,13 +39,13 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Raised MARKETING_VERSION to ${version}"
 
-      - name: Build arm64 DMG
+      - name: Build arm64 and Intel DMGs
         run: ./scripts/build-installer.sh
 
-      - name: Upload DMG
+      - name: Upload DMGs
         uses: actions/upload-artifact@v4
         with:
-          name: VidgetYo-${{ steps.version.outputs.version }}-macOS27-arm64
+          name: VidgetYo-${{ steps.version.outputs.version }}-macOS27
           path: dist/*.dmg
           if-no-files-found: error
 

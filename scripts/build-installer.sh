@@ -5,12 +5,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT="$ROOT/VidgetYo.xcodeproj"
 SCHEME="VidgetYo"
 CONFIGURATION="Release"
-DERIVED="$ROOT/build/DerivedData"
 DIST="$ROOT/dist"
 APP_NAME="VidgetYo.app"
 VOLUME_NAME="VidgetYo"
 VERSION="$(sed -n 's/.*MARKETING_VERSION = \(.*\);/\1/p' "$PROJECT/project.pbxproj" | head -1)"
-DMG_NAME="VidgetYo-${VERSION}-macOS27-arm64.dmg"
+# ARCH=arm64 or ARCH=x86_64 builds one slice. The default builds both.
+ARCHES="${ARCH:-arm64 x86_64}"
 
 # Optional environment variables:
 #   SIGN_IDENTITY="Developer ID Application: Name (TEAMID)"
@@ -32,49 +32,55 @@ SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || true)"
 echo "Using macOS SDK: ${SDK_VERSION:-unknown}"
 echo "Version: ${VERSION}"
 
-rm -rf "$DERIVED" "$DIST"
+rm -rf "$DIST"
 mkdir -p "$DIST"
 
-echo "==> Building Release arm64"
-xcodebuild \
-  -project "$PROJECT" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -derivedDataPath "$DERIVED" \
-  -destination 'platform=macOS,arch=arm64' \
-  ARCHS=arm64 \
-  ONLY_ACTIVE_ARCH=NO \
-  CODE_SIGNING_ALLOWED=NO \
-  clean build
+build_arch() {
+  local arch="$1"
+  local derived="$ROOT/build/DerivedData-$arch"
+  local dmg_name="VidgetYo-${VERSION}-macOS27-${arch}.dmg"
+  local dmg_path="$DIST/$dmg_name"
+  local stage="$DIST/dmg-root-$arch"
+  local app_path
 
-APP_PATH="$DERIVED/Build/Products/$CONFIGURATION/$APP_NAME"
-if [[ ! -d "$APP_PATH" ]]; then
-  echo "ERROR: Build succeeded but $APP_PATH was not found."
-  exit 1
-fi
+  rm -rf "$derived" "$stage"
+  echo "==> Building Release $arch"
+  xcodebuild \
+    -project "$PROJECT" \
+    -scheme "$SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -derivedDataPath "$derived" \
+    -destination "platform=macOS,arch=$arch" \
+    ARCHS="$arch" \
+    ONLY_ACTIVE_ARCH=NO \
+    CODE_SIGNING_ALLOWED=NO \
+    clean build
 
-cp -R "$APP_PATH" "$DIST/$APP_NAME"
-APP_PATH="$DIST/$APP_NAME"
-
-if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-  echo "==> Signing with Developer ID"
-  if [[ -n "${TEAM_ID:-}" ]]; then
-    echo "Team ID: $TEAM_ID"
+  app_path="$derived/Build/Products/$CONFIGURATION/$APP_NAME"
+  if [[ ! -d "$app_path" ]]; then
+    echo "ERROR: Build succeeded but $app_path was not found."
+    exit 1
   fi
-  codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_PATH"
-else
-  echo "==> No SIGN_IDENTITY set; applying ad-hoc signature for local installation"
-  codesign --force --deep --sign - "$APP_PATH"
-fi
 
-codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+  mkdir -p "$stage"
+  cp -R "$app_path" "$stage/$APP_NAME"
+  app_path="$stage/$APP_NAME"
 
-STAGE="$DIST/dmg-root"
-mkdir -p "$STAGE"
-cp -R "$APP_PATH" "$STAGE/$APP_NAME"
-ln -s /Applications "$STAGE/Applications"
+  if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+    echo "==> Signing $arch with Developer ID"
+    if [[ -n "${TEAM_ID:-}" ]]; then
+      echo "Team ID: $TEAM_ID"
+    fi
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$app_path"
+  else
+    echo "==> No SIGN_IDENTITY set; applying ad-hoc signature for $arch"
+    codesign --force --deep --sign - "$app_path"
+  fi
 
-cat > "$STAGE/README.txt" <<'TXT'
+  codesign --verify --deep --strict --verbose=2 "$app_path"
+  ln -s /Applications "$stage/Applications"
+
+  cat > "$stage/README.txt" <<'TXT'
 VidgetYo — установка
 
 1. Перетащите VidgetYo.app в Applications.
@@ -88,37 +94,47 @@ VidgetYo — установка
 Control-click VidgetYo.app > Открыть > Открыть.
 TXT
 
-DMG_PATH="$DIST/$DMG_NAME"
-rm -f "$DMG_PATH"
-echo "==> Creating DMG"
-diskutil image create from \
-  --format UDZO \
-  --volumeName "$VOLUME_NAME" \
-  "$STAGE" \
-  "$DMG_PATH"
+  rm -f "$dmg_path"
+  echo "==> Creating $arch DMG"
+  diskutil image create from \
+    --format UDZO \
+    --volumeName "$VOLUME_NAME" \
+    "$stage" \
+    "$dmg_path"
 
-if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-  echo "==> Signing DMG"
-  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DMG_PATH"
-fi
-
-if [[ -n "${NOTARY_PROFILE:-}" ]]; then
-  if [[ -z "${SIGN_IDENTITY:-}" ]]; then
-    echo "ERROR: NOTARY_PROFILE was set, but SIGN_IDENTITY is empty. Notarization requires Developer ID signing."
-    exit 1
+  if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+    echo "==> Signing $arch DMG"
+    codesign --force --timestamp --sign "$SIGN_IDENTITY" "$dmg_path"
   fi
-  echo "==> Submitting DMG for notarization"
-  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
-  echo "==> Stapling notarization ticket"
-  xcrun stapler staple "$DMG_PATH"
-  xcrun stapler validate "$DMG_PATH"
-fi
 
-rm -rf "$STAGE"
+  if [[ -n "${NOTARY_PROFILE:-}" ]]; then
+    if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+      echo "ERROR: NOTARY_PROFILE was set, but SIGN_IDENTITY is empty. Notarization requires Developer ID signing."
+      exit 1
+    fi
+    echo "==> Submitting $arch DMG for notarization"
+    xcrun notarytool submit "$dmg_path" --keychain-profile "$NOTARY_PROFILE" --wait
+    echo "==> Stapling notarization ticket"
+    xcrun stapler staple "$dmg_path"
+    xcrun stapler validate "$dmg_path"
+  fi
 
-echo
-echo "Installer: $DMG_PATH"
-shasum -a 256 "$DMG_PATH"
+  rm -rf "$stage"
+  echo
+  echo "Installer ($arch): $dmg_path"
+  shasum -a 256 "$dmg_path"
+}
+
+for arch in $ARCHES; do
+  case "$arch" in
+    arm64|x86_64) build_arch "$arch" ;;
+    *)
+      echo "ERROR: ARCH must be arm64 or x86_64, got '$arch'."
+      exit 1
+      ;;
+  esac
+done
+
 if [[ -z "${CI:-}" ]]; then
   open "$DIST"
 fi

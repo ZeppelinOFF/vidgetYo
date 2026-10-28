@@ -25,7 +25,7 @@ open build/Build/Products/Debug/VidgetYo.app
 ./scripts/build-installer.sh
 ```
 
-Готовый образ: `dist/VidgetYo-<версия>-macOS27-arm64.dmg`. Сборка Release, только Apple Silicon. Без Developer ID подпись ad-hoc: при первом запуске может понадобиться Control-click по приложению и «Открыть».
+Готовые образы: `dist/VidgetYo-<версия>-macOS27-arm64.dmg` для Apple Silicon и `dist/VidgetYo-<версия>-macOS27-x86_64.dmg` для Intel. Одна архитектура: `ARCH=arm64 ./scripts/build-installer.sh` или `ARCH=x86_64 ./scripts/build-installer.sh`. Сборка Release. Без Developer ID подпись ad-hoc: при первом запуске может понадобиться Control-click по приложению и «Открыть».
 
 ## Версии
 

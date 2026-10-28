@@ -8,13 +8,14 @@ set -euo pipefail
 : "${TARGET_SHA:?TARGET_SHA is required}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DMG="$ROOT/dist/VidgetYo-${VERSION}-macOS27-arm64.dmg"
-if [[ ! -f "$DMG" ]]; then
-  echo "ERROR: $DMG was not found."
+shopt -s nullglob
+DMGS=("$ROOT"/dist/VidgetYo-"${VERSION}"-macOS27-*.dmg)
+if [[ ${#DMGS[@]} -eq 0 ]]; then
+  echo "ERROR: no DMG found in $ROOT/dist for version $VERSION."
   exit 1
 fi
 
-export DMG
+export DMG_DIR="$ROOT/dist"
 python3 - <<'PY'
 import json
 import os
@@ -26,12 +27,19 @@ token = os.environ["GH_TOKEN"]
 version = os.environ["VERSION"]
 repo = os.environ["GITHUB_REPOSITORY"]
 target = os.environ["TARGET_SHA"]
-dmg = os.environ["DMG"]
-name = os.path.basename(dmg)
+dmg_dir = os.environ["DMG_DIR"]
+names = sorted(
+    name
+    for name in os.listdir(dmg_dir)
+    if name.startswith(f"VidgetYo-{version}-macOS27-") and name.endswith(".dmg")
+)
+if not names:
+    raise SystemExit(f"no DMG in {dmg_dir}")
+listed = "\n".join(f"- `{name}`" for name in names)
 notes = f"""Пакет собран из этого коммита после поднятия версии.
 
-- Файл: `{name}`
-- Release, Apple Silicon (arm64), macOS 27
+{listed}
+- Release, macOS 27: `arm64` — Apple Silicon, `x86_64` — Intel
 - Подпись ad-hoc, без Developer ID и нотаризации
 
 Правила версии для пуша в `main`: `major` поднимает первую цифру, `minor` вторую, любое другое сообщение — третью.
@@ -73,22 +81,24 @@ status, payload = request(
 release_id = payload["id"]
 print(f"Release {payload.get('html_url')} ({status})")
 
-with open(dmg, "rb") as handle:
-    data = handle.read()
-upload = (
-    "https://uploads.github.com/repos/"
-    f"{repo}/releases/{release_id}/assets?name={urllib.parse.quote(name)}"
-)
-req = urllib.request.Request(upload, data=data, method="POST")
-req.add_header("Authorization", f"Bearer {token}")
-req.add_header("Accept", "application/vnd.github+json")
-req.add_header("Content-Type", "application/octet-stream")
-req.add_header("Content-Length", str(len(data)))
-try:
-    with urllib.request.urlopen(req) as response:
-        uploaded = json.loads(response.read().decode())
-except urllib.error.HTTPError as error:
-    print(error.read().decode())
-    raise SystemExit(error.code)
-print(f"Uploaded {uploaded.get('name')} ({uploaded.get('size')} bytes)")
+for name in names:
+    path = os.path.join(dmg_dir, name)
+    with open(path, "rb") as handle:
+        data = handle.read()
+    upload = (
+        "https://uploads.github.com/repos/"
+        f"{repo}/releases/{release_id}/assets?name={urllib.parse.quote(name)}"
+    )
+    req = urllib.request.Request(upload, data=data, method="POST")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("Content-Type", "application/octet-stream")
+    req.add_header("Content-Length", str(len(data)))
+    try:
+        with urllib.request.urlopen(req) as response:
+            uploaded = json.loads(response.read().decode())
+    except urllib.error.HTTPError as error:
+        print(error.read().decode())
+        raise SystemExit(error.code)
+    print(f"Uploaded {uploaded.get('name')} ({uploaded.get('size')} bytes)")
 PY

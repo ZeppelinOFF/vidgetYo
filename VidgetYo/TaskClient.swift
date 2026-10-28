@@ -199,9 +199,9 @@ actor YozhkaClient {
         var typeID: Int?
         var hierarchyLevelID: Int?
         for row in Self.rows(in: json) {
-            let name = Self.text(row["name"]) ?? Self.text(row["code"]) ?? ""
-            let raw = Self.text(row["settingValue"]) ?? Self.text(row["value"])
-            guard let value = Int(raw ?? "") else { continue }
+            let name = Self.text(row["nameValue"]) ?? Self.text(row["name"]) ?? ""
+            let raw = Self.text(row["settingIds"]) ?? Self.text(row["settingValue"]) ?? ""
+            guard let value = Int(raw.split(whereSeparator: { !$0.isNumber }).first.map(String.init) ?? "") else { continue }
             if name.hasSuffix("default_type") {
                 typeID = value
             } else if name.hasSuffix("default_hierarchy_level") {
