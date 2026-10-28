@@ -91,22 +91,22 @@ actor YozhkaClient {
     }
 
     func workspaces() async throws -> [YozhkaPlace] {
-        try await page(path: "/workspace/my", query: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "100")])
+        try await page(path: "/workspace/my", query: [URLQueryItem(name: "page", value: "1"), URLQueryItem(name: "size", value: "100")])
     }
 
     func projects(workspaceID: Int) async throws -> [YozhkaPlace] {
         try await page(path: "/project/tiles/my", query: [
             URLQueryItem(name: "workspaceId", value: String(workspaceID)),
-            URLQueryItem(name: "page", value: "0"),
+            URLQueryItem(name: "page", value: "1"),
             URLQueryItem(name: "size", value: "100")
         ])
     }
 
     func tasks(projectID: Int, projectCode: String) async throws -> [TaskItem] {
         var collected: [TaskItem] = []
-        var pageIndex = 0
+        var pageIndex = 1
         var totalPages = 1
-        while pageIndex < totalPages && pageIndex < 5 {
+        while pageIndex <= totalPages && pageIndex <= 5 {
             let data = try await send(request(
                 path: "/task/\(projectID)/list",
                 method: "GET",
