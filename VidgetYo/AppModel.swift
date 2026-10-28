@@ -112,7 +112,7 @@ final class AppModel {
 
     var visibleTasks: [TaskItem] {
         tasks.filter { task in
-            let inColumn = columnID == nil || task.statusID == columnID
+            let inColumn = columnID == nil || task.statusID == columnID || (task.statusID == nil && task.status == columnTitle && !columnTitle.isEmpty)
             return inColumn && (showCompleted || !task.done)
         }
     }
@@ -305,10 +305,24 @@ final class AppModel {
     func add(title: String) async {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, let projectID else { return }
-        let temporary = TaskItem(id: "local-\(UUID().uuidString)", title: title, done: false)
+        if columns.isEmpty {
+            await loadColumns()
+        }
+        let statusID = columnID ?? columns.first?.id
+        guard let statusID else {
+            lastError = "Сначала выберите колонку"
+            return
+        }
+        let temporary = TaskItem(id: "local-\(UUID().uuidString)", title: title, done: false, status: columnTitle, statusID: statusID)
         tasks.insert(temporary, at: 0)
         do {
-            try await client.createTask(projectID: projectID, title: title)
+            try await client.createTask(
+                projectID: projectID,
+                title: title,
+                statusID: statusID,
+                projectCode: projectCode,
+                projectTitle: projectTitle
+            )
             await rememberTokens()
             tasks.removeAll { $0.id == temporary.id }
             isRefreshing = false

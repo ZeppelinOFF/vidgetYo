@@ -124,37 +124,62 @@ actor YozhkaClient {
     }
 
     func tasks(projectID: Int, projectCode: String) async throws -> [TaskItem] {
+        do {
+            return try await taskPage(projectID: projectID, projectCode: projectCode, page: 0, size: 9999)
+        } catch let error as YozhkaError {
+            guard case let .badStatus(_, message) = error, message.contains("2201X") || message.localizedCaseInsensitiveContains("offset") else {
+                throw error
+            }
+        }
         var collected: [TaskItem] = []
         var pageIndex = 1
         var totalPages = 1
         while pageIndex <= totalPages && pageIndex <= 5 {
-            let data = try await send(request(
-                path: "/task/\(projectID)/list",
-                method: "GET",
-                query: [
-                    URLQueryItem(name: "page", value: String(pageIndex)),
-                    URLQueryItem(name: "size", value: "100")
-                ],
-                body: nil,
-                authorized: true
-            ))
-            let page = try decode(TaskPage.self, from: data)
-            totalPages = max(page.totalPages ?? 1, 1)
-            collected.append(contentsOf: page.content.map { $0.task(projectCode: projectCode) })
+            let data = try await send(taskRequest(projectID: projectID, page: pageIndex, size: 100))
+            let page = try Self.taskPage(from: data, projectCode: projectCode)
+            totalPages = max(page.totalPages, 1)
+            collected.append(contentsOf: page.tasks)
             pageIndex += 1
         }
         return collected
     }
 
-    func createTask(projectID: Int, title: String) async throws {
-        let body = try JSONEncoder().encode(CreateTaskBody(title: title, projectId: projectID))
+    func createTask(projectID: Int, title: String, statusID: Int, projectCode: String, projectTitle: String) async throws {
+        let body = try JSONEncoder().encode(CreateTaskBody(
+            title: title,
+            projectId: projectID,
+            statusId: statusID,
+            projectCode: projectCode,
+            projectTitle: projectTitle
+        ))
         _ = try await send(request(
             path: "/task",
             method: "POST",
-            query: [URLQueryItem(name: "projectId", value: String(projectID))],
+            query: [
+                URLQueryItem(name: "projectId", value: String(projectID)),
+                URLQueryItem(name: "onTop", value: "true")
+            ],
             body: body,
             authorized: true
         ))
+    }
+
+    private func taskPage(projectID: Int, projectCode: String, page: Int, size: Int) async throws -> [TaskItem] {
+        let data = try await send(taskRequest(projectID: projectID, page: page, size: size))
+        return try Self.taskPage(from: data, projectCode: projectCode).tasks
+    }
+
+    private func taskRequest(projectID: Int, page: Int, size: Int) -> URLRequest {
+        request(
+            path: "/task/\(projectID)/list",
+            method: "GET",
+            query: [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "size", value: String(size))
+            ],
+            body: nil,
+            authorized: true
+        )
     }
 
     func toggleCompletion(taskID: String) async throws {
@@ -246,6 +271,44 @@ actor YozhkaClient {
         let open = list.compactMap { column(from: $0, includingClosed: false) }
         let columns = open.isEmpty ? list.compactMap { column(from: $0, includingClosed: true) } : open
         return columns.sorted { $0.order < $1.order }
+    }
+
+    private static func taskPage(from data: Data, projectCode: String) throws -> (tasks: [TaskItem], totalPages: Int) {
+        let json = try JSONSerialization.jsonObject(with: data)
+        let tasks = rows(in: json).compactMap { task(from: $0, projectCode: projectCode) }
+        let totalPages = max(integer(object(json)?["totalPages"]) ?? 1, 1)
+        return (tasks, totalPages)
+    }
+
+    private static func task(from row: [String: Any], projectCode: String) -> TaskItem? {
+        guard let id = integer(row["id"]) else { return nil }
+        let title = text(row["title"]) ?? text(row["code"]) ?? "Задача"
+        var link: String?
+        if !projectCode.isEmpty {
+            link = "https://yozhka.lukit.ru/project/\(projectCode)"
+        }
+        return TaskItem(
+            id: String(id),
+            title: title,
+            done: flag(row["isCompleted"]),
+            due: text(row["deadlineTs"]),
+            url: link,
+            status: text(row["statusName"]),
+            statusID: integer(row["statusId"])
+        )
+    }
+
+    private static func flag(_ value: Any?) -> Bool {
+        switch value {
+        case let value as Bool:
+            return value
+        case let number as NSNumber:
+            if number === (kCFBooleanTrue as NSNumber) { return true }
+            if number === (kCFBooleanFalse as NSNumber) { return false }
+            return number.intValue != 0
+        default:
+            return false
+        }
     }
 
     private static func column(from row: [String: Any], includingClosed: Bool) -> YozhkaColumn? {
@@ -387,42 +450,12 @@ private struct AuthPayload: Decodable {
     }
 }
 
-private struct TaskPage: Decodable {
-    var content: [TaskPayload]
-    var totalPages: Int?
-}
-
-private struct TaskPayload: Decodable {
-    var id: Int
-    var title: String?
-    var code: String?
-    var isCompleted: Bool?
-    var deadlineTs: String?
-    var statusName: String?
-    var statusId: Int?
-
-    func task(projectCode: String) -> TaskItem {
-        let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = (name?.isEmpty == false ? name : nil) ?? code ?? "Задача"
-        var link: String?
-        if !projectCode.isEmpty {
-            link = "https://yozhka.lukit.ru/project/\(projectCode)"
-        }
-        return TaskItem(
-            id: String(id),
-            title: resolved,
-            done: isCompleted ?? false,
-            due: deadlineTs,
-            url: link,
-            status: statusName,
-            statusID: statusId
-        )
-    }
-}
-
 private struct CreateTaskBody: Encodable {
     var title: String
     var projectId: Int
+    var statusId: Int
+    var projectCode: String
+    var projectTitle: String
 }
 
 enum TaskErrorText {

@@ -142,7 +142,32 @@ final class YozhkaFlowTests: XCTestCase {
         XCTAssertEqual(tasks[0].url, "https://yozhka.lukit.ru/project/board")
         let request = try XCTUnwrap(log.requests.first)
         XCTAssertEqual(request.url.path, "/backend/task/15/list")
-        XCTAssertEqual(queryItems(request.url)["page"], "1")
+        XCTAssertEqual(queryItems(request.url)["page"], "0")
+        XCTAssertEqual(queryItems(request.url)["size"], "9999")
+    }
+
+    func testCreateTaskGoesIntoTheSelectedColumn() async throws {
+        let log = RequestLog()
+        YozhkaStubURLProtocol.responder = { request in
+            log.add(request)
+            return (200, Data(#"{"id":9,"title":"Купить","projectId":15,"statusId":2}"#.utf8))
+        }
+        try await makeYozhkaClient(accessToken: "access", refreshToken: "refresh").createTask(
+            projectID: 15,
+            title: "Купить",
+            statusID: 2,
+            projectCode: "board",
+            projectTitle: "Доска"
+        )
+        let request = try XCTUnwrap(log.requests.first)
+        XCTAssertEqual(request.method, "POST")
+        XCTAssertEqual(request.url.path, "/backend/task")
+        XCTAssertEqual(queryItems(request.url)["projectId"], "15")
+        XCTAssertEqual(queryItems(request.url)["onTop"], "true")
+        let body = try JSONDecoder().decode(CreatedTaskPayload.self, from: request.body)
+        XCTAssertEqual(body.title, "Купить")
+        XCTAssertEqual(body.statusId, 2)
+        XCTAssertEqual(body.projectId, 15)
     }
 
     func testSignInSelectsTheOnlySpaceAndBoard() async throws {
@@ -290,6 +315,12 @@ final class YozhkaFlowTests: XCTestCase {
             AppModel(defaults: defaults, client: client)
         }
     }
+}
+
+private struct CreatedTaskPayload: Decodable {
+    var title: String
+    var projectId: Int
+    var statusId: Int
 }
 
 private struct LoginPayload: Decodable {
