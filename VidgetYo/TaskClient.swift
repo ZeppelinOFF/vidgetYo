@@ -145,13 +145,22 @@ actor YozhkaClient {
     }
 
     func createTask(projectID: Int, title: String, statusID: Int, projectCode: String, projectTitle: String) async throws {
-        let body = try JSONEncoder().encode(CreateTaskBody(
-            title: title,
-            projectId: projectID,
-            statusId: statusID,
-            projectCode: projectCode,
-            projectTitle: projectTitle
-        ))
+        let defaults = await taskDefaults()
+        var payload: [String: Any] = [
+            "title": title,
+            "projectId": projectID,
+            "projectCode": projectCode,
+            "projectTitle": projectTitle,
+            "statusId": statusID,
+            "priorityId": 2
+        ]
+        if let typeID = defaults.typeID {
+            payload["typeId"] = typeID
+        }
+        if let hierarchyLevelID = defaults.hierarchyLevelID {
+            payload["hierarchyLevelId"] = hierarchyLevelID
+        }
+        let body = try JSONSerialization.data(withJSONObject: payload)
         _ = try await send(request(
             path: "/task",
             method: "POST",
@@ -162,6 +171,41 @@ actor YozhkaClient {
             body: body,
             authorized: true
         ))
+    }
+
+    private var cachedDefaults: TaskDefaults?
+
+    private func taskDefaults() async -> TaskDefaults {
+        if let cachedDefaults {
+            return cachedDefaults
+        }
+        let loaded = (try? await loadTaskDefaults()) ?? TaskDefaults(typeID: nil, hierarchyLevelID: nil)
+        cachedDefaults = loaded
+        return loaded
+    }
+
+    private func loadTaskDefaults() async throws -> TaskDefaults {
+        let data = try await send(request(
+            path: "/globalSetting/list",
+            method: "GET",
+            query: [URLQueryItem(name: "page", value: "1"), URLQueryItem(name: "size", value: "200")],
+            body: nil,
+            authorized: true
+        ))
+        let json = try JSONSerialization.jsonObject(with: data)
+        var typeID: Int?
+        var hierarchyLevelID: Int?
+        for row in Self.rows(in: json) {
+            let name = Self.text(row["name"]) ?? Self.text(row["settingName"]) ?? Self.text(row["code"]) ?? ""
+            let value = Self.integer(row["value"]) ?? Self.integer(row["settingValue"]) ?? Int(Self.text(row["value"]) ?? "")
+            guard let value else { continue }
+            if name.hasSuffix("default_type") {
+                typeID = value
+            } else if name.hasSuffix("default_hierarchy_level") {
+                hierarchyLevelID = value
+            }
+        }
+        return TaskDefaults(typeID: typeID, hierarchyLevelID: hierarchyLevelID)
     }
 
     private func taskPage(projectID: Int, projectCode: String, page: Int, size: Int) async throws -> [TaskItem] {
@@ -450,12 +494,9 @@ private struct AuthPayload: Decodable {
     }
 }
 
-private struct CreateTaskBody: Encodable {
-    var title: String
-    var projectId: Int
-    var statusId: Int
-    var projectCode: String
-    var projectTitle: String
+private struct TaskDefaults: Sendable {
+    var typeID: Int?
+    var hierarchyLevelID: Int?
 }
 
 enum TaskErrorText {

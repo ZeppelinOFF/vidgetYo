@@ -150,6 +150,14 @@ final class YozhkaFlowTests: XCTestCase {
         let log = RequestLog()
         YozhkaStubURLProtocol.responder = { request in
             log.add(request)
+            if request.url?.path.hasSuffix("/globalSetting/list") == true {
+                return (200, Data(#"""
+                {"content":[
+                  {"name":"global_setting.task.simple.default_type","value":"3"},
+                  {"name":"global_setting.task.simple.default_hierarchy_level","value":"1"}
+                ]}
+                """#.utf8))
+            }
             return (200, Data(#"{"id":9,"title":"Купить","projectId":15,"statusId":2}"#.utf8))
         }
         try await makeYozhkaClient(accessToken: "access", refreshToken: "refresh").createTask(
@@ -159,8 +167,7 @@ final class YozhkaFlowTests: XCTestCase {
             projectCode: "board",
             projectTitle: "Доска"
         )
-        let request = try XCTUnwrap(log.requests.first)
-        XCTAssertEqual(request.method, "POST")
+        let request = try XCTUnwrap(log.requests.last { $0.method == "POST" })
         XCTAssertEqual(request.url.path, "/backend/task")
         XCTAssertEqual(queryItems(request.url)["projectId"], "15")
         XCTAssertEqual(queryItems(request.url)["onTop"], "true")
@@ -168,6 +175,9 @@ final class YozhkaFlowTests: XCTestCase {
         XCTAssertEqual(body.title, "Купить")
         XCTAssertEqual(body.statusId, 2)
         XCTAssertEqual(body.projectId, 15)
+        XCTAssertEqual(body.priorityId, 2)
+        XCTAssertEqual(body.typeId, 3)
+        XCTAssertEqual(body.hierarchyLevelId, 1)
     }
 
     func testSignInSelectsTheOnlySpaceAndBoard() async throws {
@@ -321,6 +331,9 @@ private struct CreatedTaskPayload: Decodable {
     var title: String
     var projectId: Int
     var statusId: Int
+    var priorityId: Int
+    var typeId: Int
+    var hierarchyLevelId: Int
 }
 
 private struct LoginPayload: Decodable {

@@ -33,6 +33,31 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
         panel?.orderOut(nil)
     }
 
+    func fit(taskCount: Int) {
+        guard let panel else { return }
+        let screen = panel.screen ?? NSScreen.main
+        let maxHeight = (screen?.visibleFrame.height ?? 800) - 32
+        let header: CGFloat = 78
+        let composer: CGFloat = 52
+        let row: CGFloat = 58
+        let list = taskCount == 0 ? 72 : CGFloat(taskCount) * row + 16
+        let height = min(max(header + list + composer, 180), maxHeight)
+        var frame = panel.frame
+        let top = frame.maxY
+        frame.size.height = height
+        frame.origin.y = top - height
+        if let visible = screen?.visibleFrame {
+            if frame.minY < visible.minY {
+                frame.origin.y = visible.minY + 8
+            }
+            if frame.maxY > visible.maxY {
+                frame.origin.y = visible.maxY - frame.height - 8
+            }
+        }
+        panel.setFrame(frame, display: true, animate: true)
+        OriginStore.save(frame.origin)
+    }
+
     func applyLevel() {
         guard let panel else { return }
         if model.floatAboveWindows {

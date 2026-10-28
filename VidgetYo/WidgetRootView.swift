@@ -24,6 +24,10 @@ struct WidgetRootView: View {
                 .strokeBorder(.white.opacity(0.2), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onAppear { model.controller?.fit(taskCount: model.visibleTasks.count) }
+        .onChange(of: model.visibleTasks.count) { _, count in
+            model.controller?.fit(taskCount: count)
+        }
     }
 
     private var header: some View {
@@ -31,13 +35,19 @@ struct WidgetRootView: View {
             WindowDragArea()
             HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.heading)
+                Text(model.projectTitle.isEmpty ? "Ёжка" : model.projectTitle)
                     .font(.headline)
-                    .lineLimit(1)
-                Text(statusLine)
-                    .font(.caption)
-                    .foregroundStyle(model.lastError == nil ? .secondary : Color.orange)
                     .lineLimit(2)
+                Text(model.columnTitle.isEmpty ? "Все колонки" : model.columnTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if let lastError = model.lastError {
+                    Text(lastError)
+                        .font(.caption)
+                        .foregroundStyle(Color.orange)
+                        .lineLimit(2)
+                }
             }
             .allowsHitTesting(false)
             Spacer(minLength: 8)
