@@ -45,12 +45,16 @@ actor YozhkaClient {
     private var accessToken: String
     private var refreshToken: String
 
-    init(accessToken: String, refreshToken: String) {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 20
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        configuration.httpAdditionalHeaders = ["User-Agent": "VidgetYo/1.0"]
-        session = URLSession(configuration: configuration)
+    init(accessToken: String, refreshToken: String, session: URLSession? = nil) {
+        if let session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.timeoutIntervalForRequest = 20
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            configuration.httpAdditionalHeaders = ["User-Agent": "VidgetYo/1.0"]
+            self.session = URLSession(configuration: configuration)
+        }
         self.accessToken = accessToken
         self.refreshToken = refreshToken
     }
@@ -228,12 +232,13 @@ actor YozhkaClient {
 
     private static func integer(_ value: Any?) -> Int? {
         switch value {
-        case let number as Int:
-            return number
-        case let number as NSNumber:
-            return number.intValue
         case let text as String:
-            return Int(text)
+            return Int(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        case let number as NSNumber:
+            if number === (kCFBooleanTrue as NSNumber) || number === (kCFBooleanFalse as NSNumber) {
+                return nil
+            }
+            return number.intValue
         default:
             return nil
         }

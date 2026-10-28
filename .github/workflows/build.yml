@@ -18,6 +18,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app
+
+      - name: Functional tests
+        run: ./scripts/test.sh
+
       - name: Raise version
         id: version
         env:
@@ -32,9 +38,6 @@ jobs:
           version="$(git log --format=%B $range | bash ./scripts/bump-version.sh --apply)"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Raised MARKETING_VERSION to ${version}"
-
-      - name: Select Xcode 27
-        run: sudo xcode-select -s /Applications/Xcode_27.app
 
       - name: Build arm64 DMG
         run: ./scripts/build-installer.sh

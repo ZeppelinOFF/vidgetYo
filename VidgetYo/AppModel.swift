@@ -36,7 +36,7 @@ final class AppModel {
         static let cache = "vidgetyo.cachedTasks"
     }
 
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private let client: YozhkaClient
     private var pollTask: Task<Void, Never>?
 
@@ -117,13 +117,14 @@ final class AppModel {
         projectTitle.isEmpty ? "Ёжка" : projectTitle
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard, client: YozhkaClient? = nil) {
+        self.defaults = defaults
         let storedRefresh = defaults.object(forKey: Keys.refreshSeconds) as? Int ?? 60
         let storedAccess = defaults.string(forKey: Keys.access) ?? ""
         let storedSession = defaults.string(forKey: Keys.refresh) ?? ""
         accessToken = storedAccess
         refreshToken = storedSession
-        client = YozhkaClient(accessToken: storedAccess, refreshToken: storedSession)
+        self.client = client ?? YozhkaClient(accessToken: storedAccess, refreshToken: storedSession)
         mail = defaults.string(forKey: Keys.mail) ?? ""
         fullName = defaults.string(forKey: Keys.fullName) ?? ""
         workspaceTitle = defaults.string(forKey: Keys.workspaceTitle) ?? ""
