@@ -1,0 +1,138 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000011 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AppModel.swift */; };
+		A10000000000000000000012 /* DesktopWidgetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* DesktopWidgetController.swift */; };
+		A10000000000000000000013 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* SettingsView.swift */; };
+		A10000000000000000000014 /* TaskClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* TaskClient.swift */; };
+		A10000000000000000000015 /* VidgetYoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* VidgetYoApp.swift */; };
+		A10000000000000000000016 /* WidgetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* WidgetRootView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		A10000000000000000000002 /* DesktopWidgetController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopWidgetController.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A10000000000000000000004 /* TaskClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskClient.swift; sourceTree = "<group>"; };
+		A10000000000000000000005 /* VidgetYoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VidgetYoApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000006 /* WidgetRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetRootView.swift; sourceTree = "<group>"; };
+		A10000000000000000000007 /* VidgetYo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VidgetYo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000021 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000031 = {isa = PBXGroup; children = (A10000000000000000000032 /* VidgetYo */, A10000000000000000000033 /* Products */); sourceTree = "<group>"; };
+		A10000000000000000000032 /* VidgetYo */ = {isa = PBXGroup; children = (
+			A10000000000000000000001 /* AppModel.swift */,
+			A10000000000000000000002 /* DesktopWidgetController.swift */,
+			A10000000000000000000003 /* SettingsView.swift */,
+			A10000000000000000000004 /* TaskClient.swift */,
+			A10000000000000000000005 /* VidgetYoApp.swift */,
+			A10000000000000000000006 /* WidgetRootView.swift */,
+		); path = VidgetYo; sourceTree = "<group>"; };
+		A10000000000000000000033 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000007 /* VidgetYo.app */); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000041 /* VidgetYo */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000051 /* Build configuration list for PBXNativeTarget "VidgetYo" */; buildPhases = (A10000000000000000000042 /* Sources */, A10000000000000000000021 /* Frameworks */, A10000000000000000000043 /* Resources */); buildRules = (); dependencies = (); name = VidgetYo; productName = VidgetYo; productReference = A10000000000000000000007 /* VidgetYo.app */; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000040 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2700; LastUpgradeCheck = 2700; TargetAttributes = {A10000000000000000000041 = {CreatedOnToolsVersion = 27.0; }; }; }; buildConfigurationList = A10000000000000000000050 /* Build configuration list for PBXProject "VidgetYo" */; compatibilityVersion = "Xcode 16.0"; developmentRegion = ru; hasScannedForEncodings = 0; knownRegions = (ru, Base); mainGroup = A10000000000000000000031; productRefGroup = A10000000000000000000033 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (A10000000000000000000041 /* VidgetYo */,); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000043 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000042 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			A10000000000000000000011 /* AppModel.swift in Sources */,
+			A10000000000000000000012 /* DesktopWidgetController.swift in Sources */,
+			A10000000000000000000013 /* SettingsView.swift in Sources */,
+			A10000000000000000000014 /* TaskClient.swift in Sources */,
+			A10000000000000000000015 /* VidgetYoApp.swift in Sources */,
+			A10000000000000000000016 /* WidgetRootView.swift in Sources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A10000000000000000000061 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			DEBUG_INFORMATION_FORMAT = dwarf;
+			ENABLE_TESTABILITY = YES;
+			MACOSX_DEPLOYMENT_TARGET = 15.0;
+			ONLY_ACTIVE_ARCH = YES;
+			SDKROOT = macosx;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			SWIFT_VERSION = 6.0;
+		}; name = Debug; };
+		A10000000000000000000062 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			MACOSX_DEPLOYMENT_TARGET = 15.0;
+			SDKROOT = macosx;
+			SWIFT_COMPILATION_MODE = wholemodule;
+			SWIFT_VERSION = 6.0;
+		}; name = Release; };
+		A10000000000000000000063 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			COMBINE_HIDPI_IMAGES = YES;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = NO;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = VidgetYo/Info.plist;
+			INFOPLIST_KEY_CFBundleDisplayName = "Задачи";
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+			INFOPLIST_KEY_LSUIElement = YES;
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+			MACOSX_DEPLOYMENT_TARGET = 15.0;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = local.vidgetyo;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_STRICT_CONCURRENCY = complete;
+			SWIFT_VERSION = 6.0;
+		}; name = Debug; };
+		A10000000000000000000064 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			CODE_SIGN_STYLE = Automatic;
+			COMBINE_HIDPI_IMAGES = YES;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_APP_SANDBOX = NO;
+			ENABLE_HARDENED_RUNTIME = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = VidgetYo/Info.plist;
+			INFOPLIST_KEY_CFBundleDisplayName = "Задачи";
+			INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+			INFOPLIST_KEY_LSUIElement = YES;
+			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+			MACOSX_DEPLOYMENT_TARGET = 15.0;
+			MARKETING_VERSION = 0.1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = local.vidgetyo;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_STRICT_CONCURRENCY = complete;
+			SWIFT_VERSION = 6.0;
+		}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000000000000000000050 /* Build configuration list for PBXProject "VidgetYo" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000061 /* Debug */, A10000000000000000000062 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000051 /* Build configuration list for PBXNativeTarget "VidgetYo" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000063 /* Debug */, A10000000000000000000064 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+	};
+	rootObject = A10000000000000000000040 /* Project object */;
+}

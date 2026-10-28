@@ -1,0 +1,63 @@
+name: Build installer
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Raise version
+        id: version
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [[ -n "${BEFORE:-}" && "$BEFORE" != 0000000000000000000000000000000000000000 ]]; then
+            range="${BEFORE}..${AFTER}"
+          else
+            range="-1"
+          fi
+          version="$(git log --format=%B $range | bash ./scripts/bump-version.sh --apply)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Raised MARKETING_VERSION to ${version}"
+
+      - name: Select Xcode 27
+        run: sudo xcode-select -s /Applications/Xcode_27.app
+
+      - name: Build arm64 DMG
+        run: ./scripts/build-installer.sh
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: VidgetYo-${{ steps.version.outputs.version }}-macOS27-arm64
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Save version on main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VidgetYo.xcodeproj/project.pbxproj
+          git commit -m "Bump version to ${{ steps.version.outputs.version }} [skip ci]"
+          git push origin HEAD:main
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          export TARGET_SHA="$(git rev-parse HEAD)"
+          ./scripts/publish-release.sh
