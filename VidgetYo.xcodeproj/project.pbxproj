@@ -119,7 +119,7 @@
 			INFOPLIST_KEY_LSUIElement = YES;
 			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 			MACOSX_DEPLOYMENT_TARGET = 15.0;
-			MARKETING_VERSION = 0.1.9;
+			MARKETING_VERSION = 0.1.10;
 			PRODUCT_BUNDLE_IDENTIFIER = local.vidgetyo;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
@@ -140,7 +140,7 @@
 			INFOPLIST_KEY_LSUIElement = YES;
 			LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 			MACOSX_DEPLOYMENT_TARGET = 15.0;
-			MARKETING_VERSION = 0.1.9;
+			MARKETING_VERSION = 0.1.10;
 			PRODUCT_BUNDLE_IDENTIFIER = local.vidgetyo;
 			PRODUCT_NAME = "$(TARGET_NAME)";
 			SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
