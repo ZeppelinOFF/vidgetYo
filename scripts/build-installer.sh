@@ -91,11 +91,10 @@ TXT
 DMG_PATH="$DIST/$DMG_NAME"
 rm -f "$DMG_PATH"
 echo "==> Creating DMG"
-hdiutil create \
-  -volname "$VOLUME_NAME" \
-  -srcfolder "$STAGE" \
-  -ov \
-  -format UDZO \
+diskutil image create from \
+  --format UDZO \
+  --volumeName "$VOLUME_NAME" \
+  "$STAGE" \
   "$DMG_PATH"
 
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
