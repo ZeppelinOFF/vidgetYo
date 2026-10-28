@@ -152,10 +152,10 @@ final class YozhkaFlowTests: XCTestCase {
             log.add(request)
             if request.url?.path.hasSuffix("/globalSetting/list") == true {
                 return (200, Data(#"""
-                {"content":[
-                  {"name":"global_setting.task.simple.default_type","value":"3"},
-                  {"name":"global_setting.task.simple.default_hierarchy_level","value":"1"}
-                ]}
+                [
+                  {"name":"global_setting.task.simple.default_type","nameValue":"Тип","settingValue":"3"},
+                  {"name":"global_setting.task.simple.default_hierarchy_level","nameValue":"Уровень","settingValue":"1"}
+                ]
                 """#.utf8))
             }
             return (200, Data(#"{"id":9,"title":"Купить","projectId":15,"statusId":2}"#.utf8))

@@ -152,14 +152,16 @@ actor YozhkaClient {
             "projectCode": projectCode,
             "projectTitle": projectTitle,
             "statusId": statusID,
-            "priorityId": 2
+            "priorityId": 2,
+            "typeId": defaults.typeID ?? -1,
+            "hierarchyLevelId": defaults.hierarchyLevelID ?? -1,
+            "orderNum": 0,
+            "contentData": "",
+            "attachments": [Any](),
+            "executorsIds": [Any](),
+            "observersIds": [Any](),
+            "isCompleted": false
         ]
-        if let typeID = defaults.typeID {
-            payload["typeId"] = typeID
-        }
-        if let hierarchyLevelID = defaults.hierarchyLevelID {
-            payload["hierarchyLevelId"] = hierarchyLevelID
-        }
         let body = try JSONSerialization.data(withJSONObject: payload)
         _ = try await send(request(
             path: "/task",
@@ -179,7 +181,9 @@ actor YozhkaClient {
         if let cachedDefaults {
             return cachedDefaults
         }
-        let loaded = (try? await loadTaskDefaults()) ?? TaskDefaults(typeID: nil, hierarchyLevelID: nil)
+        guard let loaded = try? await loadTaskDefaults(), loaded.typeID != nil || loaded.hierarchyLevelID != nil else {
+            return TaskDefaults(typeID: nil, hierarchyLevelID: nil)
+        }
         cachedDefaults = loaded
         return loaded
     }
@@ -188,7 +192,6 @@ actor YozhkaClient {
         let data = try await send(request(
             path: "/globalSetting/list",
             method: "GET",
-            query: [URLQueryItem(name: "page", value: "1"), URLQueryItem(name: "size", value: "200")],
             body: nil,
             authorized: true
         ))
@@ -196,9 +199,9 @@ actor YozhkaClient {
         var typeID: Int?
         var hierarchyLevelID: Int?
         for row in Self.rows(in: json) {
-            let name = Self.text(row["name"]) ?? Self.text(row["settingName"]) ?? Self.text(row["code"]) ?? ""
-            let value = Self.integer(row["value"]) ?? Self.integer(row["settingValue"]) ?? Int(Self.text(row["value"]) ?? "")
-            guard let value else { continue }
+            let name = Self.text(row["name"]) ?? Self.text(row["code"]) ?? ""
+            let raw = Self.text(row["settingValue"]) ?? Self.text(row["value"])
+            guard let value = Int(raw ?? "") else { continue }
             if name.hasSuffix("default_type") {
                 typeID = value
             } else if name.hasSuffix("default_hierarchy_level") {
