@@ -1,6 +1,21 @@
 import AppKit
 import Observation
 
+enum OriginStore {
+    static let key = "vidgetyo.origin"
+
+    static func save(_ origin: NSPoint) {
+        UserDefaults.standard.set("\(origin.x),\(origin.y)", forKey: key)
+    }
+
+    static func load() -> NSPoint? {
+        guard let raw = UserDefaults.standard.string(forKey: key) else { return nil }
+        let parts = raw.split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { return nil }
+        return NSPoint(x: parts[0], y: parts[1])
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -13,7 +28,6 @@ final class AppModel {
         static let showCompleted = "vidgetyo.showCompleted"
         static let visible = "vidgetyo.widgetVisible"
         static let cache = "vidgetyo.cachedTasks"
-        static let origin = "vidgetyo.origin"
     }
 
     private let defaults = UserDefaults.standard
@@ -188,14 +202,11 @@ final class AppModel {
     }
 
     func savedOrigin() -> NSPoint? {
-        guard let raw = defaults.string(forKey: Keys.origin) else { return nil }
-        let parts = raw.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2 else { return nil }
-        return NSPoint(x: parts[0], y: parts[1])
+        OriginStore.load()
     }
 
-    func saveOrigin(_ origin: NSPoint) {
-        defaults.set("\(origin.x),\(origin.y)", forKey: Keys.origin)
+    nonisolated func saveOrigin(_ origin: NSPoint) {
+        OriginStore.save(origin)
     }
 
     private func httpURL(_ raw: String?) -> URL? {
