@@ -6,164 +6,316 @@ struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     var done: Bool
     var due: String?
     var url: String?
+    var status: String?
 
-    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil) {
+    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil, status: String? = nil) {
         self.id = id
         self.title = title
         self.done = done
         self.due = due
         self.url = url
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case id, title, name, done, completed, isDone, status, due, dueDate, url, link
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if let value = try? container.decode(String.self, forKey: .id) {
-            id = value
-        } else if let value = try? container.decode(Int.self, forKey: .id) {
-            id = String(value)
-        } else {
-            throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "id")
-        }
-
-        if let value = try? container.decode(String.self, forKey: .title) {
-            title = value
-        } else {
-            title = try container.decode(String.self, forKey: .name)
-        }
-
-        if let value = try? container.decode(Bool.self, forKey: .done) {
-            done = value
-        } else if let value = try? container.decode(Bool.self, forKey: .completed) {
-            done = value
-        } else if let value = try? container.decode(Bool.self, forKey: .isDone) {
-            done = value
-        } else if let value = try? container.decode(String.self, forKey: .status) {
-            done = ["done", "completed", "closed"].contains(value.lowercased())
-        } else {
-            done = false
-        }
-
-        due = (try? container.decodeIfPresent(String.self, forKey: .due)) ?? (try? container.decodeIfPresent(String.self, forKey: .dueDate)) ?? nil
-        url = (try? container.decodeIfPresent(String.self, forKey: .url)) ?? (try? container.decodeIfPresent(String.self, forKey: .link)) ?? nil
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(title, forKey: .title)
-        try container.encode(done, forKey: .done)
-        try container.encodeIfPresent(due, forKey: .due)
-        try container.encodeIfPresent(url, forKey: .url)
+        self.status = status
     }
 }
 
-enum TaskClientError: Error {
+struct YozhkaPlace: Identifiable, Hashable, Sendable {
+    var id: Int
+    var title: String
+    var code: String
+}
+
+struct YozhkaSession: Sendable {
+    var accessToken: String
+    var refreshToken: String
+    var mail: String
+    var fullName: String
+}
+
+enum YozhkaError: Error {
+    case unauthorized
     case badStatus(Int, String)
     case invalidResponse
 }
 
-actor TaskClient {
+actor YozhkaClient {
+    nonisolated static let site = URL(string: "https://yozhka.lukit.ru")!
+
     private let session: URLSession
     private let decoder = JSONDecoder()
+    private var accessToken: String
+    private var refreshToken: String
 
-    init() {
+    init(accessToken: String, refreshToken: String) {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 20
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.httpAdditionalHeaders = ["User-Agent": "VidgetYo/1.0"]
         session = URLSession(configuration: configuration)
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
     }
 
-    func fetch(collection: URL, token: String) async throws -> [TaskItem] {
-        let data = try await send(request(url: collection, method: "GET", token: token, body: nil))
-        return try decodeTasks(data)
+    func replaceSession(accessToken: String, refreshToken: String) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
     }
 
-    func create(collection: URL, title: String, token: String) async throws {
-        let body = try JSONEncoder().encode(["title": title])
-        _ = try await send(request(url: collection, method: "POST", token: token, body: body))
+    func tokens() -> (access: String, refresh: String) {
+        (accessToken, refreshToken)
     }
 
-    func setDone(collection: URL, id: String, done: Bool, token: String) async throws {
-        let body = try JSONEncoder().encode(["done": done])
-        let url = Self.itemURL(collection: collection, id: id)
-        _ = try await send(request(url: url, method: "PATCH", token: token, body: body))
+    func login(mail: String, password: String) async throws -> YozhkaSession {
+        let body = try JSONEncoder().encode([
+            "mail": mail,
+            "password": password,
+            "deviceType": "web"
+        ])
+        let data = try await send(
+            request(path: "/auth/login", method: "POST", body: body, authorized: false),
+            refreshOnUnauthorized: false
+        )
+        let session = try decode(AuthPayload.self, from: data).session
+        accessToken = session.accessToken
+        refreshToken = session.refreshToken
+        return session
     }
 
-    private func decodeTasks(_ data: Data) throws -> [TaskItem] {
-        if data.isEmpty {
-            return []
+    func logout() async {
+        let token = refreshToken
+        guard !token.isEmpty else { return }
+        let body = try? JSONEncoder().encode(["refreshToken": token, "deviceType": "web"])
+        _ = try? await send(
+            request(path: "/auth/logout", method: "POST", body: body, authorized: true),
+            refreshOnUnauthorized: false
+        )
+    }
+
+    func workspaces() async throws -> [YozhkaPlace] {
+        try await page(path: "/workspace/my", query: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "100")])
+    }
+
+    func projects(workspaceID: Int) async throws -> [YozhkaPlace] {
+        try await page(path: "/project/tiles/my", query: [
+            URLQueryItem(name: "workspaceId", value: String(workspaceID)),
+            URLQueryItem(name: "page", value: "0"),
+            URLQueryItem(name: "size", value: "100")
+        ])
+    }
+
+    func tasks(projectID: Int, projectCode: String) async throws -> [TaskItem] {
+        var collected: [TaskItem] = []
+        var pageIndex = 0
+        var totalPages = 1
+        while pageIndex < totalPages && pageIndex < 5 {
+            let data = try await send(request(
+                path: "/task/\(projectID)/list",
+                method: "GET",
+                query: [
+                    URLQueryItem(name: "page", value: String(pageIndex)),
+                    URLQueryItem(name: "size", value: "100")
+                ],
+                body: nil,
+                authorized: true
+            ))
+            let page = try decode(TaskPage.self, from: data)
+            totalPages = max(page.totalPages ?? 1, 1)
+            collected.append(contentsOf: page.content.map { $0.task(projectCode: projectCode) })
+            pageIndex += 1
         }
-        if let items = try? decoder.decode([TaskItem].self, from: data) {
-            return items
-        }
-        struct Envelope: Decodable {
-            var tasks: [TaskItem]?
-            var data: [TaskItem]?
-            var items: [TaskItem]?
-        }
-        if let envelope = try? decoder.decode(Envelope.self, from: data) {
-            if let tasks = envelope.tasks { return tasks }
-            if let tasks = envelope.data { return tasks }
-            if let tasks = envelope.items { return tasks }
-        }
-        throw TaskClientError.invalidResponse
+        return collected
     }
 
-    private func request(url: URL, method: String, token: String, body: Data?) -> URLRequest {
-        var request = URLRequest(url: url)
+    func createTask(projectID: Int, title: String) async throws {
+        let body = try JSONEncoder().encode(CreateTaskBody(title: title, projectId: projectID))
+        _ = try await send(request(
+            path: "/task",
+            method: "POST",
+            query: [URLQueryItem(name: "projectId", value: String(projectID))],
+            body: body,
+            authorized: true
+        ))
+    }
+
+    func toggleCompletion(taskID: String) async throws {
+        _ = try await send(request(
+            path: "/task/\(taskID)/toggleCompletion",
+            method: "POST",
+            body: nil,
+            authorized: true
+        ))
+    }
+
+    private func page(path: String, query: [URLQueryItem]) async throws -> [YozhkaPlace] {
+        let data = try await send(request(path: path, method: "GET", query: query, body: nil, authorized: true))
+        return try decode(PlacePage.self, from: data).content.compactMap(\.place).filter { $0.code.isEmpty == false || $0.title.isEmpty == false }
+    }
+
+    private func request(
+        path: String,
+        method: String,
+        query: [URLQueryItem] = [],
+        body: Data?,
+        authorized: Bool
+    ) -> URLRequest {
+        let suffix = path.hasPrefix("/") ? path : "/" + path
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "yozhka.lukit.ru"
+        components.path = "/backend" + suffix
+        if !query.isEmpty {
+            components.queryItems = query
+        }
+        var request = URLRequest(url: components.url ?? Self.site)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            request.setValue("Bearer \(trimmed)", forHTTPHeaderField: "Authorization")
+        if authorized, !accessToken.isEmpty {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
         return request
     }
 
-    private func send(_ request: URLRequest) async throws -> Data {
+    private func send(_ request: URLRequest, refreshOnUnauthorized: Bool = true) async throws -> Data {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw TaskClientError.invalidResponse
+            throw YozhkaError.invalidResponse
+        }
+        if http.statusCode == 401 {
+            guard refreshOnUnauthorized, !refreshToken.isEmpty, request.url?.path.hasSuffix("/auth/refresh") != true else {
+                throw YozhkaError.unauthorized
+            }
+            try await refresh()
+            var retry = request
+            retry.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            return try await send(retry, refreshOnUnauthorized: false)
         }
         guard (200..<300).contains(http.statusCode) else {
-            let snippet = String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            throw TaskClientError.badStatus(http.statusCode, String(snippet.prefix(120)))
+            throw YozhkaError.badStatus(http.statusCode, Self.message(from: data))
         }
         return data
     }
 
-    private static func itemURL(collection: URL, id: String) -> URL {
-        guard var components = URLComponents(url: collection, resolvingAgainstBaseURL: false) else {
-            return collection.appendingPathComponent(id)
-        }
-        var path = components.path
-        if path.hasSuffix("/") {
-            path.removeLast()
-        }
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        components.path = path + "/" + encoded
-        return components.url ?? collection.appendingPathComponent(id)
+    private func refresh() async throws {
+        let body = try JSONEncoder().encode(["refreshToken": refreshToken])
+        let data = try await send(
+            request(path: "/auth/refresh", method: "POST", body: body, authorized: false),
+            refreshOnUnauthorized: false
+        )
+        let session = try decode(AuthPayload.self, from: data).session
+        accessToken = session.accessToken
+        refreshToken = session.refreshToken
     }
+
+    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw YozhkaError.invalidResponse
+        }
+    }
+
+    private static func message(from data: Data) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["message", "error"] {
+                if let text = object[key] as? String {
+                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        return String(trimmed.prefix(160))
+                    }
+                }
+            }
+        }
+        let snippet = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return String(snippet.prefix(160))
+    }
+}
+
+private struct AuthPayload: Decodable {
+    var accessToken: String
+    var refreshToken: String
+    var mail: String?
+    var fullName: String?
+
+    var session: YozhkaSession {
+        YozhkaSession(
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            mail: mail ?? "",
+            fullName: fullName ?? ""
+        )
+    }
+}
+
+private struct PlacePage: Decodable {
+    var content: [PlacePayload]
+}
+
+private struct PlacePayload: Decodable {
+    var id: Int?
+    var title: String?
+    var code: String?
+    var closeTs: String?
+
+    var place: YozhkaPlace? {
+        guard let id, closeTs == nil || closeTs?.isEmpty == true else { return nil }
+        let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = (name?.isEmpty == false ? name : nil) ?? code ?? "Без названия"
+        return YozhkaPlace(id: id, title: resolved, code: code ?? "")
+    }
+}
+
+private struct TaskPage: Decodable {
+    var content: [TaskPayload]
+    var totalPages: Int?
+}
+
+private struct TaskPayload: Decodable {
+    var id: Int
+    var title: String?
+    var code: String?
+    var isCompleted: Bool?
+    var deadlineTs: String?
+    var statusName: String?
+
+    func task(projectCode: String) -> TaskItem {
+        let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = (name?.isEmpty == false ? name : nil) ?? code ?? "Задача"
+        var link: String?
+        if !projectCode.isEmpty {
+            link = "https://yozhka.lukit.ru/project/\(projectCode)"
+        }
+        return TaskItem(
+            id: String(id),
+            title: resolved,
+            done: isCompleted ?? false,
+            due: deadlineTs,
+            url: link,
+            status: statusName
+        )
+    }
+}
+
+private struct CreateTaskBody: Encodable {
+    var title: String
+    var projectId: Int
 }
 
 enum TaskErrorText {
     static func describe(_ error: Error) -> String {
-        if let client = error as? TaskClientError {
+        if let client = error as? YozhkaError {
             switch client {
+            case .unauthorized:
+                return "Нужно войти снова"
             case .invalidResponse:
-                return "Непонятный ответ сервера"
+                return "Непонятный ответ Ёжки"
             case let .badStatus(code, body):
-                return body.isEmpty ? "Сервер ответил \(code)" : "Сервер ответил \(code): \(body)"
+                if code == 401 || code == 403 {
+                    return body.isEmpty ? "Неверный логин или пароль" : body
+                }
+                return body.isEmpty ? "Ёжка ответила \(code)" : body
             }
         }
         if let urlError = error as? URLError {
@@ -171,11 +323,9 @@ enum TaskErrorText {
             case .notConnectedToInternet:
                 return "Нет интернета"
             case .cannotFindHost, .cannotConnectToHost, .networkConnectionLost:
-                return "Сервер недоступен"
+                return "Ёжка недоступна"
             case .timedOut:
-                return "Сервер не ответил вовремя"
-            case .appTransportSecurityRequiresSecureConnection:
-                return "Нужен адрес https"
+                return "Ёжка не ответила вовремя"
             default:
                 return "Ошибка сети"
             }

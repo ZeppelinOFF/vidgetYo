@@ -63,9 +63,9 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
         }
         let host = NSHostingController(rootView: SettingsView().environment(model))
         let window = NSWindow(contentViewController: host)
-        window.title = "Настройки задач"
+        window.title = "Ёжка"
         window.styleMask = [.titled, .closable, .miniaturizable]
-        window.setContentSize(NSSize(width: 480, height: 520))
+        window.setContentSize(NSSize(width: 480, height: 640))
         window.isReleasedWhenClosed = false
         settingsWindow = window
         return window

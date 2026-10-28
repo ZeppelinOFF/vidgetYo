@@ -20,10 +20,16 @@ enum OriginStore {
 @Observable
 final class AppModel {
     private enum Keys {
-        static let url = "vidgetyo.tasksURL"
-        static let token = "vidgetyo.token"
-        static let appURL = "vidgetyo.appURL"
-        static let refresh = "vidgetyo.refreshSeconds"
+        static let access = "vidgetyo.accessToken"
+        static let refresh = "vidgetyo.refreshToken"
+        static let mail = "vidgetyo.mail"
+        static let fullName = "vidgetyo.fullName"
+        static let workspaceID = "vidgetyo.workspaceID"
+        static let workspaceTitle = "vidgetyo.workspaceTitle"
+        static let projectID = "vidgetyo.projectID"
+        static let projectTitle = "vidgetyo.projectTitle"
+        static let projectCode = "vidgetyo.projectCode"
+        static let refreshSeconds = "vidgetyo.refreshSeconds"
         static let float = "vidgetyo.floatAboveWindows"
         static let showCompleted = "vidgetyo.showCompleted"
         static let visible = "vidgetyo.widgetVisible"
@@ -31,24 +37,30 @@ final class AppModel {
     }
 
     private let defaults = UserDefaults.standard
-    private let client = TaskClient()
+    private let client: YozhkaClient
     private var pollTask: Task<Void, Never>?
 
     var tasks: [TaskItem] = []
+    var workspaces: [YozhkaPlace] = []
+    var projects: [YozhkaPlace] = []
     var lastError: String?
     var lastUpdated: Date?
     var isRefreshing = false
+    var isSigningIn = false
+    var isLoadingCatalog = false
     var presentSettings: () -> Void = {}
 
-    var tasksURL: String {
-        didSet { persistSettings() }
-    }
-    var token: String {
-        didSet { persistSettings() }
-    }
-    var appURL: String {
-        didSet { persistSettings() }
-    }
+    var mail: String
+    var fullName: String
+    private var accessToken: String
+    private var refreshToken: String
+
+    var workspaceID: Int?
+    var workspaceTitle: String
+    var projectID: Int?
+    var projectTitle: String
+    var projectCode: String
+
     var refreshSeconds: Int {
         didSet {
             let clamped = min(600, max(15, refreshSeconds))
@@ -85,11 +97,12 @@ final class AppModel {
 
     weak var controller: DesktopWidgetController?
 
-    var endpoint: URL? {
-        let trimmed = tasksURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() else { return nil }
-        guard scheme == "https" || scheme == "http" else { return nil }
-        return url
+    var isLoggedIn: Bool {
+        !refreshToken.isEmpty
+    }
+
+    var isConnected: Bool {
+        isLoggedIn && projectID != nil
     }
 
     var visibleTasks: [TaskItem] {
@@ -100,11 +113,24 @@ final class AppModel {
         tasks.filter { !$0.done }.count
     }
 
+    var heading: String {
+        projectTitle.isEmpty ? "Ёжка" : projectTitle
+    }
+
     init() {
-        let storedRefresh = defaults.object(forKey: Keys.refresh) as? Int ?? 60
-        tasksURL = defaults.string(forKey: Keys.url) ?? ""
-        token = defaults.string(forKey: Keys.token) ?? ""
-        appURL = defaults.string(forKey: Keys.appURL) ?? ""
+        let storedRefresh = defaults.object(forKey: Keys.refreshSeconds) as? Int ?? 60
+        let storedAccess = defaults.string(forKey: Keys.access) ?? ""
+        let storedSession = defaults.string(forKey: Keys.refresh) ?? ""
+        accessToken = storedAccess
+        refreshToken = storedSession
+        client = YozhkaClient(accessToken: storedAccess, refreshToken: storedSession)
+        mail = defaults.string(forKey: Keys.mail) ?? ""
+        fullName = defaults.string(forKey: Keys.fullName) ?? ""
+        workspaceTitle = defaults.string(forKey: Keys.workspaceTitle) ?? ""
+        projectTitle = defaults.string(forKey: Keys.projectTitle) ?? ""
+        projectCode = defaults.string(forKey: Keys.projectCode) ?? ""
+        workspaceID = defaults.object(forKey: Keys.workspaceID) as? Int
+        projectID = defaults.object(forKey: Keys.projectID) as? Int
         refreshSeconds = min(600, max(15, storedRefresh))
         floatAboveWindows = defaults.object(forKey: Keys.float) as? Bool ?? false
         showCompleted = defaults.object(forKey: Keys.showCompleted) as? Bool ?? true
@@ -117,7 +143,7 @@ final class AppModel {
 
     func start() {
         startPolling()
-        Task { await refresh() }
+        Task { await restore() }
     }
 
     func startPolling() {
@@ -132,21 +158,89 @@ final class AppModel {
         }
     }
 
-    func refresh() async {
-        guard !isRefreshing else { return }
-        guard let endpoint else {
+    func signIn(mail: String, password: String) async {
+        let mail = mail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mail.isEmpty, !password.isEmpty, !isSigningIn else { return }
+        isSigningIn = true
+        defer { isSigningIn = false }
+        do {
+            let session = try await client.login(mail: mail, password: password)
+            apply(session)
             lastError = nil
-            return
+            await loadWorkspaces()
+            if workspaces.count == 1, let only = workspaces.first {
+                await selectWorkspace(only.id)
+            }
+        } catch {
+            if let yozhka = error as? YozhkaError, case .unauthorized = yozhka {
+                lastError = "Неверный логин или пароль"
+            } else {
+                lastError = TaskErrorText.describe(error)
+            }
         }
+    }
+
+    func signOut() {
+        let client = client
+        Task {
+            await client.logout()
+            await client.replaceSession(accessToken: "", refreshToken: "")
+        }
+        accessToken = ""
+        refreshToken = ""
+        mail = ""
+        fullName = ""
+        workspaceID = nil
+        workspaceTitle = ""
+        projectID = nil
+        projectTitle = ""
+        projectCode = ""
+        workspaces = []
+        projects = []
+        tasks = []
+        lastError = nil
+        lastUpdated = nil
+        defaults.removeObject(forKey: Keys.cache)
+        persistSettings()
+    }
+
+    func selectWorkspace(_ id: Int) async {
+        guard let place = workspaces.first(where: { $0.id == id }) ?? (workspaceID == id ? currentWorkspace : nil) else { return }
+        workspaceID = place.id
+        workspaceTitle = place.title
+        projectID = nil
+        projectTitle = ""
+        projectCode = ""
+        tasks = []
+        persistSettings()
+        await loadProjects()
+        if projects.count == 1, let only = projects.first {
+            await selectProject(only.id)
+        }
+    }
+
+    func selectProject(_ id: Int) async {
+        guard let place = projects.first(where: { $0.id == id }) else { return }
+        projectID = place.id
+        projectTitle = place.title
+        projectCode = place.code
+        persistSettings()
+        await refresh()
+    }
+
+    func refresh() async {
+        guard !isRefreshing, let projectID else { return }
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            tasks = try await client.fetch(collection: endpoint, token: token)
+            tasks = try await client.tasks(projectID: projectID, projectCode: projectCode)
+            await rememberTokens()
             lastError = nil
             lastUpdated = Date()
             cacheTasks()
         } catch {
-            lastError = TaskErrorText.describe(error)
+            await rememberTokens()
+            await handle(error)
         }
     }
 
@@ -155,50 +249,48 @@ final class AppModel {
         tasks[index].done.toggle()
         cacheTasks()
         let updated = tasks[index]
-        guard let endpoint else { return }
         Task {
             do {
-                try await client.setDone(collection: endpoint, id: updated.id, done: updated.done, token: token)
+                try await client.toggleCompletion(taskID: updated.id)
+                await rememberTokens()
                 lastError = nil
+                await refresh()
             } catch {
                 if let current = tasks.firstIndex(where: { $0.id == updated.id }) {
                     tasks[current].done = !updated.done
                     cacheTasks()
                 }
-                lastError = TaskErrorText.describe(error)
+                await rememberTokens()
+                await handle(error)
             }
         }
     }
 
     func add(title: String) async {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !title.isEmpty, let endpoint else { return }
+        guard !title.isEmpty, let projectID else { return }
         let temporary = TaskItem(id: "local-\(UUID().uuidString)", title: title, done: false)
         tasks.insert(temporary, at: 0)
         do {
-            try await client.create(collection: endpoint, title: title, token: token)
+            try await client.createTask(projectID: projectID, title: title)
+            await rememberTokens()
             tasks.removeAll { $0.id == temporary.id }
             isRefreshing = false
             await refresh()
         } catch {
             tasks.removeAll { $0.id == temporary.id }
-            lastError = TaskErrorText.describe(error)
+            await rememberTokens()
+            await handle(error)
         }
     }
 
     func open(_ task: TaskItem) {
-        if let link = httpURL(task.url) {
-            NSWorkspace.shared.open(link)
-            return
-        }
-        if let link = httpURL(appURL) {
-            NSWorkspace.shared.open(link)
-        }
+        guard let link = httpURL(task.url) else { return }
+        NSWorkspace.shared.open(link)
     }
 
-    func openApp() {
-        guard let link = httpURL(appURL) else { return }
-        NSWorkspace.shared.open(link)
+    func openSite() {
+        NSWorkspace.shared.open(YozhkaClient.site)
     }
 
     func savedOrigin() -> NSPoint? {
@@ -209,11 +301,86 @@ final class AppModel {
         OriginStore.save(origin)
     }
 
+    private var currentWorkspace: YozhkaPlace? {
+        guard let workspaceID else { return nil }
+        return YozhkaPlace(id: workspaceID, title: workspaceTitle, code: "")
+    }
+
+    private func restore() async {
+        guard isLoggedIn else { return }
+        await loadWorkspaces()
+        if let workspaceID {
+            if workspaces.contains(where: { $0.id == workspaceID }) == false, !workspaceTitle.isEmpty {
+                workspaces.insert(YozhkaPlace(id: workspaceID, title: workspaceTitle, code: ""), at: 0)
+            }
+            await loadProjects()
+        }
+        if projectID != nil {
+            await refresh()
+        }
+    }
+
+    private func loadWorkspaces() async {
+        isLoadingCatalog = true
+        defer { isLoadingCatalog = false }
+        do {
+            workspaces = try await client.workspaces()
+            await rememberTokens()
+            lastError = nil
+        } catch {
+            await rememberTokens()
+            await handle(error)
+        }
+    }
+
+    private func loadProjects() async {
+        guard let workspaceID else {
+            projects = []
+            return
+        }
+        isLoadingCatalog = true
+        defer { isLoadingCatalog = false }
+        do {
+            projects = try await client.projects(workspaceID: workspaceID)
+            await rememberTokens()
+            if let projectID, projects.contains(where: { $0.id == projectID }) == false, !projectTitle.isEmpty {
+                projects.insert(YozhkaPlace(id: projectID, title: projectTitle, code: projectCode), at: 0)
+            }
+            lastError = nil
+        } catch {
+            await rememberTokens()
+            await handle(error)
+        }
+    }
+
+    private func apply(_ session: YozhkaSession) {
+        accessToken = session.accessToken
+        refreshToken = session.refreshToken
+        mail = session.mail
+        fullName = session.fullName
+        persistSettings()
+    }
+
+    private func rememberTokens() async {
+        let pair = await client.tokens()
+        guard pair.access != accessToken || pair.refresh != refreshToken else { return }
+        accessToken = pair.access
+        refreshToken = pair.refresh
+        persistSettings()
+    }
+
+    private func handle(_ error: Error) async {
+        if let clientError = error as? YozhkaError, case .unauthorized = clientError {
+            signOut()
+            presentSettings()
+        }
+        lastError = TaskErrorText.describe(error)
+    }
+
     private func httpURL(_ raw: String?) -> URL? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased() else { return nil }
-        guard scheme == "https" || scheme == "http" else { return nil }
+        guard let url = URL(string: trimmed), url.scheme?.lowercased() == "https" else { return nil }
         return url
     }
 
@@ -224,10 +391,24 @@ final class AppModel {
     }
 
     private func persistSettings() {
-        defaults.set(tasksURL, forKey: Keys.url)
-        defaults.set(token, forKey: Keys.token)
-        defaults.set(appURL, forKey: Keys.appURL)
-        defaults.set(refreshSeconds, forKey: Keys.refresh)
+        defaults.set(accessToken, forKey: Keys.access)
+        defaults.set(refreshToken, forKey: Keys.refresh)
+        defaults.set(mail, forKey: Keys.mail)
+        defaults.set(fullName, forKey: Keys.fullName)
+        defaults.set(workspaceTitle, forKey: Keys.workspaceTitle)
+        defaults.set(projectTitle, forKey: Keys.projectTitle)
+        defaults.set(projectCode, forKey: Keys.projectCode)
+        if let workspaceID {
+            defaults.set(workspaceID, forKey: Keys.workspaceID)
+        } else {
+            defaults.removeObject(forKey: Keys.workspaceID)
+        }
+        if let projectID {
+            defaults.set(projectID, forKey: Keys.projectID)
+        } else {
+            defaults.removeObject(forKey: Keys.projectID)
+        }
+        defaults.set(refreshSeconds, forKey: Keys.refreshSeconds)
         defaults.set(floatAboveWindows, forKey: Keys.float)
         defaults.set(showCompleted, forKey: Keys.showCompleted)
         defaults.set(widgetVisible, forKey: Keys.visible)

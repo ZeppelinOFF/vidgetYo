@@ -30,7 +30,7 @@ struct MenuContent: View {
         Button("Обновить") {
             Task { await model.refresh() }
         }
-        .disabled(model.endpoint == nil)
+        .disabled(!model.isConnected)
         Button("Настройки…") {
             model.presentSettings()
         }
@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             widgets.show()
         }
         model.start()
-        if model.tasksURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !model.isConnected {
             widgets.showSettings()
         }
     }

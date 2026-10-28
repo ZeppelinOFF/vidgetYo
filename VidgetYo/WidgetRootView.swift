@@ -29,8 +29,9 @@ struct WidgetRootView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Задачи")
+                Text(model.heading)
                     .font(.headline)
+                    .lineLimit(1)
                 Text(statusLine)
                     .font(.caption)
                     .foregroundStyle(model.lastError == nil ? .secondary : Color.orange)
@@ -51,7 +52,7 @@ struct WidgetRootView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .disabled(model.endpoint == nil)
+                .disabled(!model.isConnected)
                 .help("Обновить")
             }
             Button {
@@ -69,7 +70,7 @@ struct WidgetRootView: View {
 
     private var content: some View {
         Group {
-            if model.endpoint == nil && model.tasks.isEmpty {
+            if !model.isConnected && model.tasks.isEmpty {
                 emptyState
             } else if model.visibleTasks.isEmpty {
                 VStack(spacing: 8) {
@@ -97,13 +98,15 @@ struct WidgetRootView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Подключите веб-приложение")
+            Text(model.isLoggedIn ? "Выберите доску" : "Войдите в Ёжку")
                 .font(.headline)
-            Text("Виджет читает задачи по адресу API и отмечает их выполненными на сервере.")
+            Text(model.isLoggedIn
+                 ? "Сначала пространство, затем проект. Виджет покажет задачи этой доски."
+                 : "При первом запуске нужны почта и пароль с yozhka.lukit.ru. Адрес подключения не меняется.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Указать адрес") {
+            Button(model.isLoggedIn ? "Выбрать доску" : "Войти") {
                 model.presentSettings()
             }
             .buttonStyle(.borderedProminent)
@@ -117,14 +120,14 @@ struct WidgetRootView: View {
             TextField("Новая задача", text: $draft)
                 .textFieldStyle(.plain)
                 .focused($draftFocused)
-                .disabled(model.endpoint == nil)
+                .disabled(!model.isConnected)
                 .onSubmit { submit() }
             Button(action: submit) {
                 Image(systemName: "plus.circle.fill")
                     .font(.title3)
             }
             .buttonStyle(.plain)
-            .disabled(model.endpoint == nil || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(!model.isConnected || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -134,16 +137,17 @@ struct WidgetRootView: View {
         if let lastError = model.lastError {
             return lastError
         }
-        if model.endpoint == nil {
-            return "Нет адреса API"
+        if !model.isLoggedIn {
+            return "Нет входа в Ёжку"
         }
-        if let host = model.endpoint?.host() {
-            if let lastUpdated = model.lastUpdated {
-                return "\(host) · \(lastUpdated.formatted(date: .omitted, time: .shortened))"
-            }
-            return host
+        if model.projectID == nil {
+            return model.workspaceTitle.isEmpty ? "Выберите пространство и проект" : model.workspaceTitle
         }
-        return "Подключено"
+        if let lastUpdated = model.lastUpdated {
+            let place = model.workspaceTitle.isEmpty ? "Ёжка" : model.workspaceTitle
+            return "\(place) · \(lastUpdated.formatted(date: .omitted, time: .shortened))"
+        }
+        return model.workspaceTitle.isEmpty ? "Ёжка" : model.workspaceTitle
     }
 
     private func submit() {
@@ -176,10 +180,11 @@ private struct TaskRow: View {
                     .strikethrough(task.done)
                     .foregroundStyle(task.done ? .secondary : .primary)
                     .lineLimit(2)
-                if let due = DueLabel.make(task.due) {
-                    Text(due.text)
+                if let caption = taskCaption(task) {
+                    Text(caption.text)
                         .font(.caption)
-                        .foregroundStyle(due.overdue && !task.done ? Color.orange : .secondary)
+                        .foregroundStyle(caption.overdue && !task.done ? Color.orange : .secondary)
+                        .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -188,7 +193,7 @@ private struct TaskRow: View {
                 model.open(task)
             }
 
-            if task.url != nil || !model.appURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if task.url != nil {
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -200,6 +205,21 @@ private struct TaskRow: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.primary.opacity(0.001))
         }
+    }
+}
+
+private func taskCaption(_ task: TaskItem) -> DueLabel.Value? {
+    let due = DueLabel.make(task.due)
+    let status = task.status?.trimmingCharacters(in: .whitespacesAndNewlines)
+    switch (status?.isEmpty == false ? status : nil, due) {
+    case let (status?, due?):
+        return DueLabel.Value(text: "\(status) · \(due.text)", overdue: due.overdue)
+    case let (status?, nil):
+        return DueLabel.Value(text: status, overdue: false)
+    case let (nil, due?):
+        return due
+    case (nil, nil):
+        return nil
     }
 }
 

@@ -10,36 +10,71 @@ struct SettingsView: View {
 
 private struct SettingsForm: View {
     @Bindable var model: AppModel
-    @State private var connectMessage: String?
+    @State private var mail = ""
+    @State private var password = ""
 
     var body: some View {
         Form {
-            Section("Веб-приложение") {
-                TextField("Адрес API задач", text: $model.tasksURL, prompt: Text("https://example.com/api/tasks"))
-                    .textFieldStyle(.roundedBorder)
-                SecureField("Токен, если нужен", text: $model.token)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Страница приложения", text: $model.appURL, prompt: Text("https://example.com"))
-                    .textFieldStyle(.roundedBorder)
-                HStack {
-                    Button("Подключить") {
-                        Task {
-                            await model.refresh()
-                            connectMessage = model.lastError ?? "Список обновлён"
-                        }
+            Section("Ёжка") {
+                if model.isLoggedIn {
+                    LabeledContent("Аккаунт") {
+                        Text(model.fullName.isEmpty ? model.mail : "\(model.fullName) · \(model.mail)")
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
                     }
-                    .disabled(model.endpoint == nil)
-                    if let appURL = URL(string: model.appURL), appURL.scheme == "https" || appURL.scheme == "http" {
-                        Button("Открыть сайт") {
-                            model.openApp()
-                        }
+                    Button("Выйти из аккаунта", role: .destructive) {
+                        model.signOut()
+                        password = ""
                     }
-                    Spacer()
+                } else {
+                    TextField("Почта", text: $mail, prompt: Text("name@company.com"))
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.username)
+                    SecureField("Пароль", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.password)
+                        .onSubmit { signIn() }
+                    Button(model.isSigningIn ? "Вход…" : "Войти") {
+                        signIn()
+                    }
+                    .disabled(model.isSigningIn || mail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
                 }
-                if let connectMessage {
-                    Text(connectMessage)
+                if let lastError = model.lastError, !model.isConnected {
+                    Text(lastError)
                         .font(.caption)
-                        .foregroundStyle(model.lastError == nil ? .secondary : Color.orange)
+                        .foregroundStyle(Color.orange)
+                }
+            }
+
+            if model.isLoggedIn {
+                Section("Доска") {
+                    Picker("Пространство", selection: workspaceSelection) {
+                        Text("Не выбрано").tag(0)
+                        ForEach(model.workspaces) { place in
+                            Text(place.title).tag(place.id)
+                        }
+                    }
+                    .disabled(model.isLoadingCatalog || model.workspaces.isEmpty)
+                    Picker("Доска", selection: projectSelection) {
+                        Text("Не выбрано").tag(0)
+                        ForEach(model.projects) { place in
+                            Text(place.title).tag(place.id)
+                        }
+                    }
+                    .disabled(model.workspaceID == nil || model.isLoadingCatalog || model.projects.isEmpty)
+                    Text("Сначала пространство, затем доска. Доска — это проект Ёжки.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Button("Открыть Ёжку") {
+                            model.openSite()
+                        }
+                        if model.isLoadingCatalog {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Spacer()
+                    }
                 }
             }
 
@@ -53,16 +88,36 @@ private struct SettingsForm: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Section("Контракт API") {
-                Text("GET адрес — список. POST {\"title\"} — новая задача. PATCH адрес/{id} {\"done\": true} — отметка. Если токен заполнен, уходит заголовок Authorization: Bearer.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .formStyle(.grouped)
         .padding(12)
-        .frame(width: 480, height: 520)
+        .frame(width: 480)
+    }
+
+    private var workspaceSelection: Binding<Int> {
+        Binding(
+            get: { model.workspaceID ?? 0 },
+            set: { id in
+                guard id != 0, id != model.workspaceID else { return }
+                Task { await model.selectWorkspace(id) }
+            }
+        )
+    }
+
+    private var projectSelection: Binding<Int> {
+        Binding(
+            get: { model.projectID ?? 0 },
+            set: { id in
+                guard id != 0, id != model.projectID else { return }
+                Task { await model.selectProject(id) }
+            }
+        )
+    }
+
+    private func signIn() {
+        let mail = mail
+        let password = password
+        self.password = ""
+        Task { await model.signIn(mail: mail, password: password) }
     }
 }
