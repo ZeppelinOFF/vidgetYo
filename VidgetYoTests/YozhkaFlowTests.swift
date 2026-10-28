@@ -226,6 +226,47 @@ final class YozhkaFlowTests: XCTestCase {
         XCTAssertTrue(loggedIn)
     }
 
+    func testColumnsKeepBoardOrderAndSkipClosedOnes() async throws {
+        let log = RequestLog()
+        YozhkaStubURLProtocol.responder = { request in
+            log.add(request)
+            return (200, Data(#"""
+            [
+              {"id":2,"name":"В работе","nameM":"В работе","orderNum":2,"closeTs":null,"statusColor":"#54b2bc"},
+              {"id":1,"name":"Новые","orderNum":1,"closeTs":null},
+              {"id":9,"name":"Архив","orderNum":9,"closeTs":"2020-01-01T00:00:00"}
+            ]
+            """#.utf8))
+        }
+        let columns = try await makeYozhkaClient(accessToken: "access", refreshToken: "refresh").columns(projectID: 15)
+        XCTAssertEqual(columns.map(\.title), ["Новые", "В работе"])
+        let request = try XCTUnwrap(log.requests.first)
+        XCTAssertEqual(request.url.path, "/backend/workflowStatusesAvail")
+        XCTAssertEqual(queryItems(request.url)["projectId"], "15")
+    }
+
+    func testSelectedColumnFiltersTheWidget() async {
+        let model = await model()
+        await MainActor.run {
+            model.tasks = [
+                TaskItem(id: "1", title: "Новая", done: false, statusID: 1),
+                TaskItem(id: "2", title: "В работе", done: false, statusID: 2)
+            ]
+            model.columns = [
+                YozhkaColumn(id: 1, title: "Новые", order: 1),
+                YozhkaColumn(id: 2, title: "В работе", order: 2)
+            ]
+            model.selectColumn(2)
+        }
+        let titles = await model.visibleTasks.map(\.title)
+        let heading = await model.heading
+        XCTAssertEqual(titles, ["В работе"])
+        XCTAssertEqual(heading, "Ёжка")
+        await MainActor.run { model.projectTitle = "HomeHub" }
+        let named = await model.heading
+        XCTAssertEqual(named, "HomeHub · В работе")
+    }
+
     func testCompletedTasksCanBeHidden() async {
         let model = await model()
         await MainActor.run {

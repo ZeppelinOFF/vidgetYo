@@ -27,7 +27,9 @@ struct WidgetRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        ZStack {
+            WindowDragArea()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.heading)
                     .font(.headline)
@@ -37,11 +39,14 @@ struct WidgetRootView: View {
                     .foregroundStyle(model.lastError == nil ? .secondary : Color.orange)
                     .lineLimit(2)
             }
+            .allowsHitTesting(false)
             Spacer(minLength: 8)
+                .allowsHitTesting(false)
             Text("\(model.openCount)")
                 .font(.title2.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
             if model.isRefreshing {
                 ProgressView()
                     .controlSize(.small)
@@ -62,10 +67,11 @@ struct WidgetRootView: View {
             }
             .buttonStyle(.plain)
             .help("Настройки")
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
     }
 
     private var content: some View {
@@ -77,7 +83,7 @@ struct WidgetRootView: View {
                     Image(systemName: "checkmark.circle")
                         .font(.title2)
                         .foregroundStyle(.secondary)
-                    Text(model.tasks.isEmpty ? "Список пуст" : "Все задачи выполнены")
+                    Text(emptyListTitle)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -143,11 +149,24 @@ struct WidgetRootView: View {
         if model.projectID == nil {
             return model.workspaceTitle.isEmpty ? "Выберите пространство и проект" : model.workspaceTitle
         }
+        if model.columnID != nil, model.visibleTasks.isEmpty, !model.tasks.isEmpty {
+            return "В колонке «\(model.columnTitle)» нет задач"
+        }
         if let lastUpdated = model.lastUpdated {
             let place = model.workspaceTitle.isEmpty ? "Ёжка" : model.workspaceTitle
             return "\(place) · \(lastUpdated.formatted(date: .omitted, time: .shortened))"
         }
         return model.workspaceTitle.isEmpty ? "Ёжка" : model.workspaceTitle
+    }
+
+    private var emptyListTitle: String {
+        if model.tasks.isEmpty {
+            return "Список пуст"
+        }
+        if model.columnID != nil, model.visibleTasks.isEmpty {
+            return "В этой колонке пусто"
+        }
+        return "Все задачи выполнены"
     }
 
     private func submit() {
@@ -249,6 +268,10 @@ private enum DueLabel {
     }
 }
 
+extension Notification.Name {
+    static let vidgetYoDragEnded = Notification.Name("vidgetyo.dragEnded")
+}
+
 struct WindowDragArea: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         DragView()
@@ -259,4 +282,11 @@ struct WindowDragArea: NSViewRepresentable {
 
 final class DragView: NSView {
     override var mouseDownCanMoveWindow: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        window.level = .floating
+        window.performDrag(with: event)
+        NotificationCenter.default.post(name: .vidgetYoDragEnded, object: window)
+    }
 }

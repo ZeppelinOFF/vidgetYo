@@ -7,14 +7,16 @@ struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     var due: String?
     var url: String?
     var status: String?
+    var statusID: Int?
 
-    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil, status: String? = nil) {
+    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil, status: String? = nil, statusID: Int? = nil) {
         self.id = id
         self.title = title
         self.done = done
         self.due = due
         self.url = url
         self.status = status
+        self.statusID = statusID
     }
 }
 
@@ -22,6 +24,12 @@ struct YozhkaPlace: Identifiable, Hashable, Sendable {
     var id: Int
     var title: String
     var code: String
+}
+
+struct YozhkaColumn: Identifiable, Hashable, Sendable {
+    var id: Int
+    var title: String
+    var order: Int
 }
 
 struct YozhkaSession: Sendable {
@@ -102,6 +110,17 @@ actor YozhkaClient {
         try await pages(path: "/project/tiles/my", extra: [
             URLQueryItem(name: "workspaceId", value: String(workspaceID))
         ])
+    }
+
+    func columns(projectID: Int) async throws -> [YozhkaColumn] {
+        let data = try await send(request(
+            path: "/workflowStatusesAvail",
+            method: "GET",
+            query: [URLQueryItem(name: "projectId", value: String(projectID))],
+            body: nil,
+            authorized: true
+        ))
+        return try Self.columns(from: data)
     }
 
     func tasks(projectID: Int, projectCode: String) async throws -> [TaskItem] {
@@ -219,6 +238,23 @@ actor YozhkaClient {
             return array.map { $0 }
         }
         return nil
+    }
+
+    private static func columns(from data: Data) throws -> [YozhkaColumn] {
+        let json = try JSONSerialization.jsonObject(with: data)
+        let list = rows(in: json)
+        let open = list.compactMap { column(from: $0, includingClosed: false) }
+        let columns = open.isEmpty ? list.compactMap { column(from: $0, includingClosed: true) } : open
+        return columns.sorted { $0.order < $1.order }
+    }
+
+    private static func column(from row: [String: Any], includingClosed: Bool) -> YozhkaColumn? {
+        guard let id = integer(row["id"]) else { return nil }
+        if !includingClosed, let closed = text(row["closeTs"]), !closed.isEmpty {
+            return nil
+        }
+        let title = text(row["name"]) ?? text(row["nameM"]) ?? text(row["statusName"]) ?? "Колонка"
+        return YozhkaColumn(id: id, title: title, order: integer(row["orderNum"]) ?? 0)
     }
 
     private static func place(from row: [String: Any]) -> YozhkaPlace? {
@@ -363,6 +399,7 @@ private struct TaskPayload: Decodable {
     var isCompleted: Bool?
     var deadlineTs: String?
     var statusName: String?
+    var statusId: Int?
 
     func task(projectCode: String) -> TaskItem {
         let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -377,7 +414,8 @@ private struct TaskPayload: Decodable {
             done: isCompleted ?? false,
             due: deadlineTs,
             url: link,
-            status: statusName
+            status: statusName,
+            statusID: statusId
         )
     }
 }

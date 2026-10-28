@@ -7,9 +7,20 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
     private var panel: DesktopPanel?
     private var settingsWindow: NSWindow?
 
+    private var dragObserver: NSObjectProtocol?
+
     init(model: AppModel) {
         self.model = model
         super.init()
+        dragObserver = NotificationCenter.default.addObserver(
+            forName: .vidgetYoDragEnded,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applyLevel()
+            }
+        }
     }
 
     func show() {
@@ -48,7 +59,7 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
         let panel = DesktopPanel(contentRect: frame)
         panel.delegate = self
         let root = WidgetRootView().environment(model)
-        let hosting = NSHostingView(rootView: root)
+        let hosting = WidgetHostingView(rootView: root)
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
         hosting.layer?.isOpaque = false
@@ -99,6 +110,31 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
     }
 }
 
+final class WidgetHostingView<Content: View>: NSHostingView<Content> {
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if let hit = super.hitTest(point), hit !== self, containsInteractiveView(hit) {
+            super.mouseDown(with: event)
+            return
+        }
+        guard let window else { return }
+        window.level = .floating
+        window.performDrag(with: event)
+        NotificationCenter.default.post(name: .vidgetYoDragEnded, object: window)
+    }
+
+    private func containsInteractiveView(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let candidate = current, candidate !== self {
+            if candidate is NSButton || candidate is NSTextField || candidate is NSScrollView {
+                return true
+            }
+            current = candidate.superview
+        }
+        return false
+    }
+}
+
 final class DesktopPanel: NSPanel {
     init(contentRect: NSRect) {
         super.init(
@@ -112,7 +148,8 @@ final class DesktopPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        isMovable = true
+        collectionBehavior = [.canJoinAllSpaces, .ignoresCycle, .fullScreenAuxiliary]
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
         titleVisibility = .hidden

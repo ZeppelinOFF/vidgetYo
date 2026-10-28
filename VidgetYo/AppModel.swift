@@ -29,6 +29,8 @@ final class AppModel {
         static let projectID = "vidgetyo.projectID"
         static let projectTitle = "vidgetyo.projectTitle"
         static let projectCode = "vidgetyo.projectCode"
+        static let columnID = "vidgetyo.columnID"
+        static let columnTitle = "vidgetyo.columnTitle"
         static let refreshSeconds = "vidgetyo.refreshSeconds"
         static let float = "vidgetyo.floatAboveWindows"
         static let showCompleted = "vidgetyo.showCompleted"
@@ -43,6 +45,7 @@ final class AppModel {
     var tasks: [TaskItem] = []
     var workspaces: [YozhkaPlace] = []
     var projects: [YozhkaPlace] = []
+    var columns: [YozhkaColumn] = []
     var lastError: String?
     var lastUpdated: Date?
     var isRefreshing = false
@@ -60,6 +63,8 @@ final class AppModel {
     var projectID: Int?
     var projectTitle: String
     var projectCode: String
+    var columnID: Int?
+    var columnTitle: String
 
     var refreshSeconds: Int {
         didSet {
@@ -106,15 +111,20 @@ final class AppModel {
     }
 
     var visibleTasks: [TaskItem] {
-        tasks.filter { showCompleted || !$0.done }
+        tasks.filter { task in
+            let inColumn = columnID == nil || task.statusID == columnID
+            return inColumn && (showCompleted || !task.done)
+        }
     }
 
     var openCount: Int {
-        tasks.filter { !$0.done }.count
+        visibleTasks.filter { !$0.done }.count
     }
 
     var heading: String {
-        projectTitle.isEmpty ? "Ёжка" : projectTitle
+        if projectTitle.isEmpty { return "Ёжка" }
+        if columnTitle.isEmpty { return projectTitle }
+        return "\(projectTitle) · \(columnTitle)"
     }
 
     init(defaults: UserDefaults = .standard, client: YozhkaClient? = nil) {
@@ -130,6 +140,8 @@ final class AppModel {
         workspaceTitle = defaults.string(forKey: Keys.workspaceTitle) ?? ""
         projectTitle = defaults.string(forKey: Keys.projectTitle) ?? ""
         projectCode = defaults.string(forKey: Keys.projectCode) ?? ""
+        columnTitle = defaults.string(forKey: Keys.columnTitle) ?? ""
+        columnID = defaults.object(forKey: Keys.columnID) as? Int
         workspaceID = defaults.object(forKey: Keys.workspaceID) as? Int
         projectID = defaults.object(forKey: Keys.projectID) as? Int
         refreshSeconds = min(600, max(15, storedRefresh))
@@ -196,7 +208,10 @@ final class AppModel {
         projectID = nil
         projectTitle = ""
         projectCode = ""
+        columnID = nil
+        columnTitle = ""
         workspaces = []
+        columns = []
         projects = []
         tasks = []
         lastError = nil
@@ -212,6 +227,9 @@ final class AppModel {
         projectID = nil
         projectTitle = ""
         projectCode = ""
+        columnID = nil
+        columnTitle = ""
+        columns = []
         tasks = []
         persistSettings()
         await loadProjects()
@@ -222,11 +240,28 @@ final class AppModel {
 
     func selectProject(_ id: Int) async {
         guard let place = projects.first(where: { $0.id == id }) else { return }
+        if projectID != place.id {
+            columnID = nil
+            columnTitle = ""
+            columns = []
+        }
         projectID = place.id
         projectTitle = place.title
         projectCode = place.code
         persistSettings()
+        await loadColumns()
         await refresh()
+    }
+
+    func selectColumn(_ id: Int?) {
+        if let id, let column = columns.first(where: { $0.id == id }) {
+            columnID = column.id
+            columnTitle = column.title
+        } else {
+            columnID = nil
+            columnTitle = ""
+        }
+        persistSettings()
     }
 
     func refresh() async {
@@ -317,6 +352,7 @@ final class AppModel {
             await loadProjects()
         }
         if projectID != nil {
+            await loadColumns()
             await refresh()
         }
     }
@@ -349,6 +385,28 @@ final class AppModel {
             }
             lastError = projects.isEmpty ? "В этом пространстве нет досок" : nil
         } catch {
+            await rememberTokens()
+            await handle(error)
+        }
+    }
+
+    private func loadColumns() async {
+        guard let projectID else {
+            columns = []
+            return
+        }
+        do {
+            columns = try await client.columns(projectID: projectID)
+            await rememberTokens()
+            if let columnID, let match = columns.first(where: { $0.id == columnID }) {
+                columnTitle = match.title
+            } else if columnID != nil {
+                self.columnID = nil
+                columnTitle = ""
+            }
+            persistSettings()
+        } catch {
+            columns = []
             await rememberTokens()
             await handle(error)
         }
@@ -399,6 +457,12 @@ final class AppModel {
         defaults.set(workspaceTitle, forKey: Keys.workspaceTitle)
         defaults.set(projectTitle, forKey: Keys.projectTitle)
         defaults.set(projectCode, forKey: Keys.projectCode)
+        defaults.set(columnTitle, forKey: Keys.columnTitle)
+        if let columnID {
+            defaults.set(columnID, forKey: Keys.columnID)
+        } else {
+            defaults.removeObject(forKey: Keys.columnID)
+        }
         if let workspaceID {
             defaults.set(workspaceID, forKey: Keys.workspaceID)
         } else {

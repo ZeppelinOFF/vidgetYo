@@ -62,7 +62,14 @@ private struct SettingsForm: View {
                         }
                     }
                     .disabled(model.workspaceID == nil || model.isLoadingCatalog)
-                    Text("Сначала пространство, затем доска. Доска — это проект Ёжки.")
+                    Picker("Колонка", selection: columnSelection) {
+                        Text("Все колонки").tag(0)
+                        ForEach(model.columns) { column in
+                            Text(column.title).tag(column.id)
+                        }
+                    }
+                    .disabled(model.projectID == nil || model.isLoadingCatalog)
+                    Text("Сначала пространство, затем доска. Колонка оставляет на виджете только задачи этого статуса.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     HStack {
@@ -84,7 +91,7 @@ private struct SettingsForm: View {
                 }
                 Toggle("Показывать выполненные", isOn: $model.showCompleted)
                 Toggle("Поверх всех окон", isOn: $model.floatAboveWindows)
-                Text("Выключенный переключатель оставляет виджет на рабочем столе: он виден на обоях и на всех пространствах, обычные окна его закрывают.")
+                Text("Потяните виджет за шапку — его можно поставить в любую точку экрана, в том числе на другой монитор. Выключенный переключатель оставляет его на рабочем столе: обычные окна его закрывают.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -100,6 +107,15 @@ private struct SettingsForm: View {
             set: { id in
                 guard id != 0, id != model.workspaceID else { return }
                 Task { await model.selectWorkspace(id) }
+            }
+        )
+    }
+
+    private var columnSelection: Binding<Int> {
+        Binding(
+            get: { model.columnID ?? 0 },
+            set: { id in
+                model.selectColumn(id == 0 ? nil : id)
             }
         )
     }
