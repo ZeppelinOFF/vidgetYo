@@ -91,7 +91,7 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
     }
 
     nonisolated func windowDidMove(_ notification: Notification) {
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             guard let panel = notification.object as? NSWindow else { return }
             model.saveOrigin(panel.frame.origin)
         }
