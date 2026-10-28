@@ -326,7 +326,7 @@ final class AppModel {
         do {
             workspaces = try await client.workspaces()
             await rememberTokens()
-            lastError = nil
+            lastError = workspaces.isEmpty ? "Ёжка не вернула ни одного пространства" : nil
         } catch {
             await rememberTokens()
             await handle(error)
@@ -346,7 +346,7 @@ final class AppModel {
             if let projectID, projects.contains(where: { $0.id == projectID }) == false, !projectTitle.isEmpty {
                 projects.insert(YozhkaPlace(id: projectID, title: projectTitle, code: projectCode), at: 0)
             }
-            lastError = nil
+            lastError = projects.isEmpty ? "В этом пространстве нет досок" : nil
         } catch {
             await rememberTokens()
             await handle(error)

@@ -54,14 +54,14 @@ private struct SettingsForm: View {
                             Text(place.title).tag(place.id)
                         }
                     }
-                    .disabled(model.isLoadingCatalog || model.workspaces.isEmpty)
+                    .disabled(model.isLoadingCatalog)
                     Picker("Доска", selection: projectSelection) {
                         Text("Не выбрано").tag(0)
                         ForEach(model.projects) { place in
                             Text(place.title).tag(place.id)
                         }
                     }
-                    .disabled(model.workspaceID == nil || model.isLoadingCatalog || model.projects.isEmpty)
+                    .disabled(model.workspaceID == nil || model.isLoadingCatalog)
                     Text("Сначала пространство, затем доска. Доска — это проект Ёжки.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

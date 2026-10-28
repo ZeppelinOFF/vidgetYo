@@ -91,14 +91,12 @@ actor YozhkaClient {
     }
 
     func workspaces() async throws -> [YozhkaPlace] {
-        try await page(path: "/workspace/my", query: [URLQueryItem(name: "page", value: "1"), URLQueryItem(name: "size", value: "100")])
+        try await pages(path: "/workspace/my", extra: [])
     }
 
     func projects(workspaceID: Int) async throws -> [YozhkaPlace] {
-        try await page(path: "/project/tiles/my", query: [
-            URLQueryItem(name: "workspaceId", value: String(workspaceID)),
-            URLQueryItem(name: "page", value: "1"),
-            URLQueryItem(name: "size", value: "100")
+        try await pages(path: "/project/tiles/my", extra: [
+            URLQueryItem(name: "workspaceId", value: String(workspaceID))
         ])
     }
 
@@ -145,9 +143,108 @@ actor YozhkaClient {
         ))
     }
 
-    private func page(path: String, query: [URLQueryItem]) async throws -> [YozhkaPlace] {
-        let data = try await send(request(path: path, method: "GET", query: query, body: nil, authorized: true))
-        return try decode(PlacePage.self, from: data).content.compactMap(\.place).filter { $0.code.isEmpty == false || $0.title.isEmpty == false }
+    private func pages(path: String, extra: [URLQueryItem]) async throws -> [YozhkaPlace] {
+        var collected: [YozhkaPlace] = []
+        var pageIndex = 1
+        var totalPages = 1
+        while pageIndex <= totalPages && pageIndex <= 5 {
+            var query = extra
+            query.append(URLQueryItem(name: "page", value: String(pageIndex)))
+            query.append(URLQueryItem(name: "size", value: "24"))
+            let data = try await send(request(path: path, method: "GET", query: query, body: nil, authorized: true))
+            let page = try Self.parsedPage(from: data)
+            totalPages = page.totalPages
+            collected.append(contentsOf: page.places)
+            pageIndex += 1
+        }
+        return collected
+    }
+
+    private static func parsedPage(from data: Data) throws -> (places: [YozhkaPlace], totalPages: Int) {
+        let json = try JSONSerialization.jsonObject(with: data)
+        let list = rows(in: json)
+        let places = list.compactMap(place(from:))
+        if places.isEmpty, let first = list.first {
+            let keys = first.keys.sorted().joined(separator: ", ")
+            throw YozhkaError.badStatus(200, "В списке нет id. Поля: \(keys)")
+        }
+        let totalPages = max(integer(object(json)?["totalPages"]) ?? 1, 1)
+        return (places, totalPages)
+    }
+
+    private static func rows(in json: Any) -> [[String: Any]] {
+        if let rows = list(json)?.compactMap(object), !rows.isEmpty {
+            return rows
+        }
+        guard let container = object(json) else { return [] }
+        for key in ["content", "data", "items"] {
+            if let rows = list(container[key])?.compactMap(object), !rows.isEmpty {
+                return rows
+            }
+            if let nested = container[key] {
+                let inner = rows(in: nested)
+                if !inner.isEmpty {
+                    return inner
+                }
+            }
+        }
+        return []
+    }
+
+    private static func object(_ value: Any?) -> [String: Any]? {
+        guard let value else { return nil }
+        if let dict = value as? [String: Any] {
+            return dict
+        }
+        guard let dict = value as? NSDictionary else { return nil }
+        var result: [String: Any] = [:]
+        result.reserveCapacity(dict.count)
+        for (key, item) in dict {
+            guard let key = key as? String else { continue }
+            result[key] = item
+        }
+        return result
+    }
+
+    private static func list(_ value: Any?) -> [Any]? {
+        guard let value else { return nil }
+        if let array = value as? [Any] {
+            return array
+        }
+        if let array = value as? NSArray {
+            return array.map { $0 }
+        }
+        return nil
+    }
+
+    private static func place(from row: [String: Any]) -> YozhkaPlace? {
+        guard let id = integer(row["id"]) ?? integer(row["workspaceId"]) ?? integer(row["projectId"]) else {
+            return nil
+        }
+        let title = text(row["title"]) ?? text(row["name"]) ?? text(row["code"]) ?? "Без названия"
+        let code = text(row["code"]) ?? ""
+        return YozhkaPlace(id: id, title: title, code: code)
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        switch value {
+        case let number as Int:
+            return number
+        case let number as NSNumber:
+            return number.intValue
+        case let text as String:
+            return Int(text)
+        default:
+            return nil
+        }
+    }
+
+    private static func text(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        if value is NSNull { return nil }
+        let raw = (value as? String) ?? String(describing: value)
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func request(
@@ -246,24 +343,6 @@ private struct AuthPayload: Decodable {
             mail: mail ?? "",
             fullName: fullName ?? ""
         )
-    }
-}
-
-private struct PlacePage: Decodable {
-    var content: [PlacePayload]
-}
-
-private struct PlacePayload: Decodable {
-    var id: Int?
-    var title: String?
-    var code: String?
-    var closeTs: String?
-
-    var place: YozhkaPlace? {
-        guard let id, closeTs == nil || closeTs?.isEmpty == true else { return nil }
-        let name = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = (name?.isEmpty == false ? name : nil) ?? code ?? "Без названия"
-        return YozhkaPlace(id: id, title: resolved, code: code ?? "")
     }
 }
 
