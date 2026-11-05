@@ -37,6 +37,7 @@ final class AppModel {
         static let showCompleted = "vidgetyo.showCompleted"
         static let visible = "vidgetyo.widgetVisible"
         static let cache = "vidgetyo.cachedTasks"
+        static let checkUpdatesOnLaunch = "vidgetyo.checkUpdatesOnLaunch"
     }
 
     private let defaults: UserDefaults
@@ -107,6 +108,12 @@ final class AppModel {
             }
         }
     }
+    var checkUpdatesOnLaunch: Bool {
+        didSet {
+            guard checkUpdatesOnLaunch != oldValue else { return }
+            persistSettings()
+        }
+    }
 
     weak var controller: DesktopWidgetController?
 
@@ -171,6 +178,11 @@ final class AppModel {
         floatAboveWindows = defaults.object(forKey: Keys.float) as? Bool ?? false
         showCompleted = defaults.object(forKey: Keys.showCompleted) as? Bool ?? true
         widgetVisible = defaults.object(forKey: Keys.visible) as? Bool ?? true
+        if defaults.object(forKey: Keys.checkUpdatesOnLaunch) != nil {
+            checkUpdatesOnLaunch = defaults.bool(forKey: Keys.checkUpdatesOnLaunch)
+        } else {
+            checkUpdatesOnLaunch = true
+        }
         if let data = defaults.data(forKey: Keys.cache),
            let cached = try? JSONDecoder().decode([TaskItem].self, from: data) {
             tasks = cached
@@ -180,6 +192,9 @@ final class AppModel {
     func start() {
         startPolling()
         Task { await restore() }
+        if checkUpdatesOnLaunch {
+            Task { await checkForUpdates(manual: false) }
+        }
     }
 
     func startPolling() {
@@ -380,21 +395,26 @@ final class AppModel {
         NSWorkspace.shared.open(YozhkaClient.site)
     }
 
-    func checkForUpdates() async {
+    func checkForUpdates(manual: Bool = true) async {
         guard !isCheckingForUpdate else { return }
         isCheckingForUpdate = true
-        updateNotice = nil
-        availableUpdate = nil
+        if manual {
+            updateNotice = nil
+            availableUpdate = nil
+        }
         defer { isCheckingForUpdate = false }
         do {
             let current = appVersion
             if let info = try await releaseFetcher.latestNewerThan(current: current) {
                 availableUpdate = info
-            } else {
+            } else if manual {
+                availableUpdate = nil
                 updateNotice = "У вас последняя версия (\(current))."
             }
         } catch {
-            updateNotice = error.localizedDescription
+            if manual {
+                updateNotice = error.localizedDescription
+            }
         }
     }
 
@@ -570,6 +590,7 @@ final class AppModel {
         defaults.set(floatAboveWindows, forKey: Keys.float)
         defaults.set(showCompleted, forKey: Keys.showCompleted)
         defaults.set(widgetVisible, forKey: Keys.visible)
+        defaults.set(checkUpdatesOnLaunch, forKey: Keys.checkUpdatesOnLaunch)
     }
 
     private func persistTokens() {

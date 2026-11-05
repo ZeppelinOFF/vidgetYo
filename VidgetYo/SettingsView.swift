@@ -101,6 +101,7 @@ private struct SettingsForm: View {
                     Text(model.appVersion)
                         .foregroundStyle(.secondary)
                 }
+                Toggle("Проверять при запуске", isOn: $model.checkUpdatesOnLaunch)
                 if let update = model.availableUpdate {
                     Text("Доступна версия \(update.version)")
                         .foregroundStyle(Color.orange)
@@ -131,7 +132,7 @@ private struct SettingsForm: View {
                     Task { await model.checkForUpdates() }
                 }
                 .disabled(model.isCheckingForUpdate || model.isDownloadingUpdate)
-                Text("Сборки публикуются в репозитории ZeppelinOFF/vidgetYo. Скачивается DMG под ваш процессор (Apple Silicon или Intel).")
+                Text("При запуске виджет тихо смотрит релизы на GitHub. Кнопка ниже — ручная проверка. DMG подбирается под ваш процессор (Apple Silicon или Intel).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
