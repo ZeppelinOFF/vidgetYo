@@ -26,6 +26,7 @@ final class AppModel {
         static let fullName = "vidgetyo.fullName"
         static let workspaceID = "vidgetyo.workspaceID"
         static let workspaceTitle = "vidgetyo.workspaceTitle"
+        static let workspaceCode = "vidgetyo.workspaceCode"
         static let projectID = "vidgetyo.projectID"
         static let projectTitle = "vidgetyo.projectTitle"
         static let projectCode = "vidgetyo.projectCode"
@@ -40,6 +41,7 @@ final class AppModel {
 
     private let defaults: UserDefaults
     private let client: YozhkaClient
+    private let releaseFetcher: GitHubReleaseFetcher
     private var pollTask: Task<Void, Never>?
 
     var tasks: [TaskItem] = []
@@ -51,6 +53,10 @@ final class AppModel {
     var isRefreshing = false
     var isSigningIn = false
     var isLoadingCatalog = false
+    var availableUpdate: GitHubReleaseInfo?
+    var updateNotice: String?
+    var isCheckingForUpdate = false
+    var isDownloadingUpdate = false
     var presentSettings: () -> Void = {}
 
     var mail: String
@@ -60,6 +66,7 @@ final class AppModel {
 
     var workspaceID: Int?
     var workspaceTitle: String
+    var workspaceCode: String
     var projectID: Int?
     var projectTitle: String
     var projectCode: String
@@ -127,7 +134,15 @@ final class AppModel {
         return "\(projectTitle) · \(columnTitle)"
     }
 
-    init(defaults: UserDefaults = .standard, client: YozhkaClient? = nil) {
+    var appVersion: String {
+        AppVersion.current()
+    }
+
+    init(
+        defaults: UserDefaults = .standard,
+        client: YozhkaClient? = nil,
+        releaseFetcher: GitHubReleaseFetcher = .production
+    ) {
         self.defaults = defaults
         let storedRefresh = defaults.object(forKey: Keys.refreshSeconds) as? Int ?? 60
         let storedAccess = defaults.string(forKey: Keys.access) ?? ""
@@ -135,9 +150,11 @@ final class AppModel {
         accessToken = storedAccess
         refreshToken = storedSession
         self.client = client ?? YozhkaClient(accessToken: storedAccess, refreshToken: storedSession)
+        self.releaseFetcher = releaseFetcher
         mail = defaults.string(forKey: Keys.mail) ?? ""
         fullName = defaults.string(forKey: Keys.fullName) ?? ""
         workspaceTitle = defaults.string(forKey: Keys.workspaceTitle) ?? ""
+        workspaceCode = defaults.string(forKey: Keys.workspaceCode) ?? ""
         projectTitle = defaults.string(forKey: Keys.projectTitle) ?? ""
         projectCode = defaults.string(forKey: Keys.projectCode) ?? ""
         columnTitle = defaults.string(forKey: Keys.columnTitle) ?? ""
@@ -205,6 +222,7 @@ final class AppModel {
         fullName = ""
         workspaceID = nil
         workspaceTitle = ""
+        workspaceCode = ""
         projectID = nil
         projectTitle = ""
         projectCode = ""
@@ -224,6 +242,7 @@ final class AppModel {
         guard let place = workspaces.first(where: { $0.id == id }) ?? (workspaceID == id ? currentWorkspace : nil) else { return }
         workspaceID = place.id
         workspaceTitle = place.title
+        workspaceCode = place.code
         projectID = nil
         projectTitle = ""
         projectCode = ""
@@ -269,7 +288,11 @@ final class AppModel {
         isRefreshing = true
         defer { isRefreshing = false }
         do {
-            tasks = try await client.tasks(projectID: projectID, projectCode: projectCode)
+            tasks = try await client.tasks(
+                projectID: projectID,
+                workspaceCode: workspaceCode,
+                projectCode: projectCode
+            )
             await rememberTokens()
             lastError = nil
             lastUpdated = Date()
@@ -335,12 +358,56 @@ final class AppModel {
     }
 
     func open(_ task: TaskItem) {
-        guard let link = httpURL(task.url) else { return }
+        let urlString = task.url ?? {
+            guard let code = task.code, !code.isEmpty else { return nil }
+            return YozhkaClient.taskPageURL(
+                workspaceCode: workspaceCode,
+                projectCode: projectCode,
+                taskCode: code
+            )
+        }()
+        guard let link = httpURL(urlString) else { return }
         NSWorkspace.shared.open(link)
     }
 
     func openSite() {
         NSWorkspace.shared.open(YozhkaClient.site)
+    }
+
+    func checkForUpdates() async {
+        guard !isCheckingForUpdate else { return }
+        isCheckingForUpdate = true
+        updateNotice = nil
+        availableUpdate = nil
+        defer { isCheckingForUpdate = false }
+        do {
+            let current = appVersion
+            if let info = try await releaseFetcher.latestNewerThan(current: current) {
+                availableUpdate = info
+            } else {
+                updateNotice = "У вас последняя версия (\(current))."
+            }
+        } catch {
+            updateNotice = error.localizedDescription
+        }
+    }
+
+    func downloadUpdate() async {
+        guard let info = availableUpdate, !isDownloadingUpdate else { return }
+        isDownloadingUpdate = true
+        defer { isDownloadingUpdate = false }
+        do {
+            let dmgURL = try await releaseFetcher.downloadAsset(info: info)
+            NSWorkspace.shared.open(dmgURL)
+            updateNotice = "Открылся образ «\(info.assetFileName)». Перетащите «Задачи» в «Программы» и перезапустите виджет."
+        } catch {
+            updateNotice = error.localizedDescription
+        }
+    }
+
+    func openReleasePage() {
+        guard let url = availableUpdate?.releasePageURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func savedOrigin() -> NSPoint? {
@@ -353,7 +420,7 @@ final class AppModel {
 
     private var currentWorkspace: YozhkaPlace? {
         guard let workspaceID else { return nil }
-        return YozhkaPlace(id: workspaceID, title: workspaceTitle, code: "")
+        return YozhkaPlace(id: workspaceID, title: workspaceTitle, code: workspaceCode)
     }
 
     private func restore() async {
@@ -361,7 +428,13 @@ final class AppModel {
         await loadWorkspaces()
         if let workspaceID {
             if workspaces.contains(where: { $0.id == workspaceID }) == false, !workspaceTitle.isEmpty {
-                workspaces.insert(YozhkaPlace(id: workspaceID, title: workspaceTitle, code: ""), at: 0)
+                workspaces.insert(
+                    YozhkaPlace(id: workspaceID, title: workspaceTitle, code: workspaceCode),
+                    at: 0
+                )
+            }
+            if let match = workspaces.first(where: { $0.id == workspaceID }), !match.code.isEmpty {
+                workspaceCode = match.code
             }
             await loadProjects()
         }
@@ -469,6 +542,7 @@ final class AppModel {
         defaults.set(mail, forKey: Keys.mail)
         defaults.set(fullName, forKey: Keys.fullName)
         defaults.set(workspaceTitle, forKey: Keys.workspaceTitle)
+        defaults.set(workspaceCode, forKey: Keys.workspaceCode)
         defaults.set(projectTitle, forKey: Keys.projectTitle)
         defaults.set(projectCode, forKey: Keys.projectCode)
         defaults.set(columnTitle, forKey: Keys.columnTitle)

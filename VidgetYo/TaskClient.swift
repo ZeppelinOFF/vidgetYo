@@ -9,7 +9,9 @@ struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     var status: String?
     var statusID: Int?
 
-    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil, status: String? = nil, statusID: Int? = nil) {
+    var code: String?
+
+    init(id: String, title: String, done: Bool, due: String? = nil, url: String? = nil, status: String? = nil, statusID: Int? = nil, code: String? = nil) {
         self.id = id
         self.title = title
         self.done = done
@@ -17,6 +19,7 @@ struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         self.url = url
         self.status = status
         self.statusID = statusID
+        self.code = code
     }
 }
 
@@ -123,9 +126,9 @@ actor YozhkaClient {
         return try Self.columns(from: data)
     }
 
-    func tasks(projectID: Int, projectCode: String) async throws -> [TaskItem] {
+    func tasks(projectID: Int, workspaceCode: String, projectCode: String) async throws -> [TaskItem] {
         do {
-            return try await taskPage(projectID: projectID, projectCode: projectCode, page: 0, size: 9999)
+            return try await taskPage(projectID: projectID, workspaceCode: workspaceCode, projectCode: projectCode, page: 0, size: 9999)
         } catch let error as YozhkaError {
             guard case let .badStatus(_, message) = error, message.contains("2201X") || message.localizedCaseInsensitiveContains("offset") else {
                 throw error
@@ -136,7 +139,7 @@ actor YozhkaClient {
         var totalPages = 1
         while pageIndex <= totalPages && pageIndex <= 5 {
             let data = try await send(taskRequest(projectID: projectID, page: pageIndex, size: 100))
-            let page = try Self.taskPage(from: data, projectCode: projectCode)
+            let page = try Self.taskPage(from: data, workspaceCode: workspaceCode, projectCode: projectCode)
             totalPages = max(page.totalPages, 1)
             collected.append(contentsOf: page.tasks)
             pageIndex += 1
@@ -146,21 +149,20 @@ actor YozhkaClient {
 
     func createTask(projectID: Int, title: String, statusID: Int, projectCode: String, projectTitle: String) async throws {
         let defaults = await taskDefaults()
-        var payload: [String: Any] = [
+        guard let typeID = defaults.typeID, let hierarchyLevelID = defaults.hierarchyLevelID else {
+            throw YozhkaError.badStatus(0, "Не удалось загрузить настройки задач из Ёжки")
+        }
+        let priorityID = defaults.priorityID ?? 2
+        let payload: [String: Any] = [
             "title": title,
             "projectId": projectID,
             "projectCode": projectCode,
             "projectTitle": projectTitle,
             "statusId": statusID,
-            "priorityId": 2,
-            "typeId": defaults.typeID ?? -1,
-            "hierarchyLevelId": defaults.hierarchyLevelID ?? -1,
-            "orderNum": 0,
-            "contentData": "",
-            "attachments": [Any](),
-            "executorsIds": [Any](),
-            "observersIds": [Any](),
-            "isCompleted": false
+            "priorityId": priorityID,
+            "typeId": typeID,
+            "hierarchyLevelId": hierarchyLevelID,
+            "contentData": ""
         ]
         let body = try JSONSerialization.data(withJSONObject: payload)
         _ = try await send(request(
@@ -181,9 +183,7 @@ actor YozhkaClient {
         if let cachedDefaults {
             return cachedDefaults
         }
-        guard let loaded = try? await loadTaskDefaults(), loaded.typeID != nil || loaded.hierarchyLevelID != nil else {
-            return TaskDefaults(typeID: nil, hierarchyLevelID: nil)
-        }
+        let loaded = (try? await loadTaskDefaults()) ?? TaskDefaults()
         cachedDefaults = loaded
         return loaded
     }
@@ -198,22 +198,42 @@ actor YozhkaClient {
         let json = try JSONSerialization.jsonObject(with: data)
         var typeID: Int?
         var hierarchyLevelID: Int?
+        var priorityID: Int?
         for row in Self.rows(in: json) {
-            let name = Self.text(row["nameValue"]) ?? Self.text(row["name"]) ?? ""
-            let raw = Self.text(row["settingIds"]) ?? Self.text(row["settingValue"]) ?? ""
-            guard let value = Int(raw.split(whereSeparator: { !$0.isNumber }).first.map(String.init) ?? "") else { continue }
-            if name.hasSuffix("default_type") {
+            let key = Self.settingKey(from: row)
+            guard let value = Self.settingInt(from: row) else { continue }
+            if key.hasSuffix("default_type") {
                 typeID = value
-            } else if name.hasSuffix("default_hierarchy_level") {
+            } else if key.hasSuffix("default_hierarchy_level") {
                 hierarchyLevelID = value
+            } else if key.hasSuffix("default_priority") {
+                priorityID = value
             }
         }
-        return TaskDefaults(typeID: typeID, hierarchyLevelID: hierarchyLevelID)
+        return TaskDefaults(typeID: typeID, hierarchyLevelID: hierarchyLevelID, priorityID: priorityID)
     }
 
-    private func taskPage(projectID: Int, projectCode: String, page: Int, size: Int) async throws -> [TaskItem] {
+    private static func settingKey(from row: [String: Any]) -> String {
+        text(row["groupValue"]) ?? text(row["nameValue"]) ?? text(row["name"]) ?? ""
+    }
+
+    private static func settingInt(from row: [String: Any]) -> Int? {
+        if let raw = text(row["settingIds"]) {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let value = Int(trimmed) { return value }
+            if let first = trimmed.split(whereSeparator: { !$0.isNumber }).first, let value = Int(first) {
+                return value
+            }
+        }
+        if let raw = text(row["settingValue"]), let value = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return value
+        }
+        return integer(row["settingIds"]) ?? integer(row["settingValue"])
+    }
+
+    private func taskPage(projectID: Int, workspaceCode: String, projectCode: String, page: Int, size: Int) async throws -> [TaskItem] {
         let data = try await send(taskRequest(projectID: projectID, page: page, size: size))
-        return try Self.taskPage(from: data, projectCode: projectCode).tasks
+        return try Self.taskPage(from: data, workspaceCode: workspaceCode, projectCode: projectCode).tasks
     }
 
     private func taskRequest(projectID: Int, page: Int, size: Int) -> URLRequest {
@@ -320,20 +340,31 @@ actor YozhkaClient {
         return columns.sorted { $0.order < $1.order }
     }
 
-    private static func taskPage(from data: Data, projectCode: String) throws -> (tasks: [TaskItem], totalPages: Int) {
+    private static func taskPage(from data: Data, workspaceCode: String, projectCode: String) throws -> (tasks: [TaskItem], totalPages: Int) {
         let json = try JSONSerialization.jsonObject(with: data)
-        let tasks = rows(in: json).compactMap { task(from: $0, projectCode: projectCode) }
+        let tasks = rows(in: json).compactMap { task(from: $0, workspaceCode: workspaceCode, projectCode: projectCode) }
         let totalPages = max(integer(object(json)?["totalPages"]) ?? 1, 1)
         return (tasks, totalPages)
     }
 
-    private static func task(from row: [String: Any], projectCode: String) -> TaskItem? {
+    nonisolated static func taskPageURL(workspaceCode: String, projectCode: String, taskCode: String) -> String? {
+        let workspace = workspaceCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let project = projectCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let task = taskCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !workspace.isEmpty, !project.isEmpty, !task.isEmpty else { return nil }
+        func enc(_ value: String) -> String {
+            value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+        }
+        return "https://yozhka.lukit.ru/workspace/\(enc(workspace))/project/\(enc(project))/board/\(enc(task))"
+    }
+
+    private static func task(from row: [String: Any], workspaceCode: String, projectCode: String) -> TaskItem? {
         guard let id = integer(row["id"]) else { return nil }
         let title = text(row["title"]) ?? text(row["code"]) ?? "Задача"
-        var link: String?
-        if !projectCode.isEmpty {
-            link = "https://yozhka.lukit.ru/project/\(projectCode)"
-        }
+        let taskCode = text(row["code"]) ?? ""
+        let workspace = text(row["workspaceCode"]) ?? workspaceCode
+        let project = text(row["projectCode"]) ?? projectCode
+        let link = taskPageURL(workspaceCode: workspace, projectCode: project, taskCode: taskCode)
         return TaskItem(
             id: String(id),
             title: title,
@@ -341,7 +372,8 @@ actor YozhkaClient {
             due: text(row["deadlineTs"]),
             url: link,
             status: text(row["statusName"]),
-            statusID: integer(row["statusId"])
+            statusID: integer(row["statusId"]),
+            code: taskCode.isEmpty ? nil : taskCode
         )
     }
 
@@ -500,6 +532,7 @@ private struct AuthPayload: Decodable {
 private struct TaskDefaults: Sendable {
     var typeID: Int?
     var hierarchyLevelID: Int?
+    var priorityID: Int?
 }
 
 enum TaskErrorText {

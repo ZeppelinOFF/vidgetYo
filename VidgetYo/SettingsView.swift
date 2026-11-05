@@ -95,6 +95,46 @@ private struct SettingsForm: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Обновления") {
+                LabeledContent("Версия") {
+                    Text(model.appVersion)
+                        .foregroundStyle(.secondary)
+                }
+                if let update = model.availableUpdate {
+                    Text("Доступна версия \(update.version)")
+                        .foregroundStyle(Color.orange)
+                    HStack {
+                        Button(model.isDownloadingUpdate ? "Скачивание…" : "Скачать и установить") {
+                            Task { await model.downloadUpdate() }
+                        }
+                        .disabled(model.isDownloadingUpdate)
+                        Button("Страница релиза") {
+                            model.openReleasePage()
+                        }
+                    }
+                }
+                if model.isCheckingForUpdate {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Проверка на GitHub…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let notice = model.updateNotice {
+                    Text(notice)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Button("Проверить обновления") {
+                    Task { await model.checkForUpdates() }
+                }
+                .disabled(model.isCheckingForUpdate || model.isDownloadingUpdate)
+                Text("Сборки публикуются в репозитории ZeppelinOFF/vidgetYo. Скачивается DMG под ваш процессор (Apple Silicon или Intel).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding(12)

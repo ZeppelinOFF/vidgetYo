@@ -134,12 +134,19 @@ final class YozhkaFlowTests: XCTestCase {
             ],"totalPages":1}
             """#.utf8))
         }
-        let tasks = try await makeYozhkaClient(accessToken: "access", refreshToken: "refresh").tasks(projectID: 15, projectCode: "board")
+        let tasks = try await makeYozhkaClient(accessToken: "access", refreshToken: "refresh").tasks(
+            projectID: 15,
+            workspaceCode: "home",
+            projectCode: "board"
+        )
         XCTAssertEqual(tasks.map(\.title), ["Купить", "T-2"])
         XCTAssertEqual(tasks.map(\.done), [false, true])
         XCTAssertEqual(tasks[0].due, "2026-10-28")
         XCTAssertEqual(tasks[0].status, "В работе")
-        XCTAssertEqual(tasks[0].url, "https://yozhka.lukit.ru/project/board")
+        XCTAssertEqual(
+            tasks[0].url,
+            "https://yozhka.lukit.ru/workspace/home/project/board/board/T-1"
+        )
         let request = try XCTUnwrap(log.requests.first)
         XCTAssertEqual(request.url.path, "/backend/task/15/list")
         XCTAssertEqual(queryItems(request.url)["page"], "0")
@@ -153,8 +160,8 @@ final class YozhkaFlowTests: XCTestCase {
             if request.url?.path.hasSuffix("/globalSetting/list") == true {
                 return (200, Data(#"""
                 [
-                  {"nameValue":"global_setting.task.simple.default_type","settingIds":"3","settingValue":"Тип"},
-                  {"nameValue":"global_setting.task.simple.default_hierarchy_level","settingIds":"1","settingValue":"Уровень"}
+                  {"groupValue":"global_setting.task.simple.default_type","settingIds":"3","settingValue":"Тип"},
+                  {"groupValue":"global_setting.task.simple.default_hierarchy_level","settingIds":"1","settingValue":"Уровень"}
                 ]
                 """#.utf8))
             }
