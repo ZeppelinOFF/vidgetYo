@@ -13,6 +13,7 @@
 		A10000000000000000000015 /* VidgetYoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* VidgetYoApp.swift */; };
 		A10000000000000000000016 /* WidgetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* WidgetRootView.swift */; };
 		A10000000000000000000018 /* GitHubReleaseUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* GitHubReleaseUpdate.swift */; };
+		A1000000000000000000001A /* SessionTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000A /* SessionTokenStore.swift */; };
 		A10000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009 /* Assets.xcassets */; };
 		A20000000000000000000011 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AppModel.swift */; };
 		A20000000000000000000012 /* DesktopWidgetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* DesktopWidgetController.swift */; };
@@ -23,6 +24,7 @@
 		A20000000000000000000017 /* YozhkaStubURLProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* YozhkaStubURLProtocol.swift */; };
 		A20000000000000000000018 /* GitHubReleaseUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* GitHubReleaseUpdate.swift */; };
 		A20000000000000000000019 /* GitHubReleaseUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* GitHubReleaseUpdateTests.swift */; };
+		A2000000000000000000001A /* SessionTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000A /* SessionTokenStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +35,7 @@
 		A10000000000000000000005 /* VidgetYoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VidgetYoApp.swift; sourceTree = "<group>"; };
 		A10000000000000000000006 /* WidgetRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000008 /* GitHubReleaseUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubReleaseUpdate.swift; sourceTree = "<group>"; };
+		A1000000000000000000000A /* SessionTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTokenStore.swift; sourceTree = "<group>"; };
 		A10000000000000000000009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000000000000000000007 /* VidgetYo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VidgetYo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000001 /* YozhkaFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YozhkaFlowTests.swift; sourceTree = "<group>"; };
@@ -56,6 +59,7 @@
 			A10000000000000000000005 /* VidgetYoApp.swift */,
 			A10000000000000000000006 /* WidgetRootView.swift */,
 			A10000000000000000000008 /* GitHubReleaseUpdate.swift */,
+			A1000000000000000000000A /* SessionTokenStore.swift */,
 			A10000000000000000000009 /* Assets.xcassets */,
 		); path = VidgetYo; sourceTree = "<group>"; };
 		A20000000000000000000034 /* VidgetYoTests */ = {isa = PBXGroup; children = (A20000000000000000000001 /* YozhkaFlowTests.swift */, A20000000000000000000002 /* YozhkaStubURLProtocol.swift */, A20000000000000000000003 /* GitHubReleaseUpdateTests.swift */); path = VidgetYoTests; sourceTree = "<group>"; };
@@ -86,6 +90,7 @@
 			A10000000000000000000015 /* VidgetYoApp.swift in Sources */,
 			A10000000000000000000016 /* WidgetRootView.swift in Sources */,
 			A10000000000000000000018 /* GitHubReleaseUpdate.swift in Sources */,
+			A1000000000000000000001A /* SessionTokenStore.swift in Sources */,
 		); runOnlyForDeploymentPostprocessing = 0; };
 		A20000000000000000000042 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
 			A20000000000000000000011 /* AppModel.swift in Sources */,
@@ -97,6 +102,7 @@
 			A20000000000000000000017 /* YozhkaStubURLProtocol.swift in Sources */,
 			A20000000000000000000018 /* GitHubReleaseUpdate.swift in Sources */,
 			A20000000000000000000019 /* GitHubReleaseUpdateTests.swift in Sources */,
+			A2000000000000000000001A /* SessionTokenStore.swift in Sources */,
 		); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

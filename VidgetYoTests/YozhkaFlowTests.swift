@@ -2,8 +2,11 @@ import XCTest
 
 final class YozhkaFlowTests: XCTestCase {
     private var suiteName: String?
+    private var tokenStore: SessionTokenStore?
 
     override func tearDown() {
+        tokenStore?.clear()
+        tokenStore = nil
         if let suiteName {
             UserDefaults(suiteName: suiteName)?.removePersistentDomain(forName: suiteName)
         }
@@ -322,14 +325,35 @@ final class YozhkaFlowTests: XCTestCase {
         XCTAssertEqual(titles, ["Открытая"])
     }
 
+    func testMigratesTokensFromUserDefaultsToKeychain() async {
+        let name = "vidgetyo.tests.\(UUID().uuidString)"
+        suiteName = name
+        let store = SessionTokenStore(service: name)
+        tokenStore = store
+
+        await MainActor.run {
+            let defaults = UserDefaults(suiteName: name)!
+            defaults.removePersistentDomain(forName: name)
+            defaults.set("legacy-access", forKey: "vidgetyo.accessToken")
+            defaults.set("legacy-refresh", forKey: "vidgetyo.refreshToken")
+            let model = AppModel(defaults: defaults, tokenStore: store, client: makeYozhkaClient())
+            XCTAssertTrue(model.isLoggedIn)
+            XCTAssertNil(defaults.string(forKey: "vidgetyo.accessToken"))
+            XCTAssertNil(defaults.string(forKey: "vidgetyo.refreshToken"))
+        }
+        XCTAssertEqual(store.load().access, "legacy-access")
+        XCTAssertEqual(store.load().refresh, "legacy-refresh")
+    }
+
     private func model() async -> AppModel {
         let name = "vidgetyo.tests.\(UUID().uuidString)"
         suiteName = name
-        let defaults = UserDefaults(suiteName: name)!
-        defaults.removePersistentDomain(forName: name)
-        let client = makeYozhkaClient()
+        let store = SessionTokenStore(service: name)
+        tokenStore = store
         return await MainActor.run {
-            AppModel(defaults: defaults, client: client)
+            let defaults = UserDefaults(suiteName: name)!
+            defaults.removePersistentDomain(forName: name)
+            return AppModel(defaults: defaults, tokenStore: store, client: makeYozhkaClient())
         }
     }
 }

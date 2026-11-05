@@ -40,6 +40,7 @@ final class AppModel {
     }
 
     private let defaults: UserDefaults
+    private let tokenStore: SessionTokenStore
     private let client: YozhkaClient
     private let releaseFetcher: GitHubReleaseFetcher
     private var pollTask: Task<Void, Never>?
@@ -140,16 +141,21 @@ final class AppModel {
 
     init(
         defaults: UserDefaults = .standard,
+        tokenStore: SessionTokenStore = .production,
         client: YozhkaClient? = nil,
         releaseFetcher: GitHubReleaseFetcher = .production
     ) {
         self.defaults = defaults
+        self.tokenStore = tokenStore
+        tokenStore.migrateFromUserDefaults(defaults, accessKey: Keys.access, refreshKey: Keys.refresh)
         let storedRefresh = defaults.object(forKey: Keys.refreshSeconds) as? Int ?? 60
-        let storedAccess = defaults.string(forKey: Keys.access) ?? ""
-        let storedSession = defaults.string(forKey: Keys.refresh) ?? ""
-        accessToken = storedAccess
-        refreshToken = storedSession
-        self.client = client ?? YozhkaClient(accessToken: storedAccess, refreshToken: storedSession)
+        let storedTokens = tokenStore.load()
+        accessToken = storedTokens.access
+        refreshToken = storedTokens.refresh
+        self.client = client ?? YozhkaClient(
+            accessToken: storedTokens.access,
+            refreshToken: storedTokens.refresh
+        )
         self.releaseFetcher = releaseFetcher
         mail = defaults.string(forKey: Keys.mail) ?? ""
         fullName = defaults.string(forKey: Keys.fullName) ?? ""
@@ -537,8 +543,7 @@ final class AppModel {
     }
 
     private func persistSettings() {
-        defaults.set(accessToken, forKey: Keys.access)
-        defaults.set(refreshToken, forKey: Keys.refresh)
+        persistTokens()
         defaults.set(mail, forKey: Keys.mail)
         defaults.set(fullName, forKey: Keys.fullName)
         defaults.set(workspaceTitle, forKey: Keys.workspaceTitle)
@@ -565,5 +570,15 @@ final class AppModel {
         defaults.set(floatAboveWindows, forKey: Keys.float)
         defaults.set(showCompleted, forKey: Keys.showCompleted)
         defaults.set(widgetVisible, forKey: Keys.visible)
+    }
+
+    private func persistTokens() {
+        if accessToken.isEmpty, refreshToken.isEmpty {
+            tokenStore.clear()
+        } else {
+            tokenStore.save(access: accessToken, refresh: refreshToken)
+        }
+        defaults.removeObject(forKey: Keys.access)
+        defaults.removeObject(forKey: Keys.refresh)
     }
 }
