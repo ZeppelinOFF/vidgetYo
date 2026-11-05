@@ -1,5 +1,4 @@
 import XCTest
-@testable import VidgetYo
 
 final class GitHubReleaseUpdateTests: XCTestCase {
     func testVersionCompareOrdersSemver() {
