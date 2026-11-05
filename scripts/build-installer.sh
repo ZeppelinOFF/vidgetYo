@@ -85,7 +85,7 @@ VidgetYo — установка
 
 1. Перетащите VidgetYo.app в Applications.
 2. Запустите VidgetYo из Applications.
-3. В настройках укажите адрес API задач веб-приложения.
+3. В настройках войдите в Ёжку и выберите пространство с доской.
 
 Виджет лежит на рабочем столе. Иконка в строке меню — чеклист.
 Пункт «Поверх окон» поднимает карточку над обычными окнами.
@@ -96,10 +96,11 @@ TXT
 
   rm -f "$dmg_path"
   echo "==> Creating $arch DMG"
-  diskutil image create from \
-    --format UDZO \
-    --volumeName "$VOLUME_NAME" \
-    "$stage" \
+  hdiutil create \
+    -volname "$VOLUME_NAME" \
+    -srcfolder "$stage" \
+    -ov \
+    -format UDZO \
     "$dmg_path"
 
   if [[ -n "${SIGN_IDENTITY:-}" ]]; then
