@@ -148,7 +148,8 @@ actor YozhkaClient {
     }
 
     func createTask(projectID: Int, title: String, statusID: Int, projectCode: String, projectTitle: String) async throws {
-        let defaults = await taskDefaults()
+        cachedDefaults = nil
+        let defaults = await taskDefaults(forceReload: true)
         guard let typeID = defaults.typeID, let hierarchyLevelID = defaults.hierarchyLevelID else {
             throw YozhkaError.badStatus(0, "Не удалось загрузить настройки задач из Ёжки")
         }
@@ -179,11 +180,13 @@ actor YozhkaClient {
 
     private var cachedDefaults: TaskDefaults?
 
-    private func taskDefaults() async -> TaskDefaults {
-        if let cachedDefaults {
+    private func taskDefaults(forceReload: Bool = false) async -> TaskDefaults {
+        if !forceReload, let cachedDefaults {
             return cachedDefaults
         }
-        let loaded = (try? await loadTaskDefaults()) ?? TaskDefaults()
+        guard let loaded = try? await loadTaskDefaults(), loaded.typeID != nil, loaded.hierarchyLevelID != nil else {
+            return TaskDefaults()
+        }
         cachedDefaults = loaded
         return loaded
     }
@@ -214,7 +217,11 @@ actor YozhkaClient {
     }
 
     private static func settingKey(from row: [String: Any]) -> String {
-        text(row["groupValue"]) ?? text(row["nameValue"]) ?? text(row["name"]) ?? ""
+        text(row["nameValueM"])
+            ?? text(row["nameValue"])
+            ?? text(row["groupValue"])
+            ?? text(row["name"])
+            ?? ""
     }
 
     private static func settingInt(from row: [String: Any]) -> Int? {

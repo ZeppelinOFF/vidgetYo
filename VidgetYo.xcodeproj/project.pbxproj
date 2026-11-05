@@ -13,6 +13,7 @@
 		A10000000000000000000015 /* VidgetYoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* VidgetYoApp.swift */; };
 		A10000000000000000000016 /* WidgetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* WidgetRootView.swift */; };
 		A10000000000000000000018 /* GitHubReleaseUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* GitHubReleaseUpdate.swift */; };
+		A10000000000000000000019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009 /* Assets.xcassets */; };
 		A20000000000000000000011 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AppModel.swift */; };
 		A20000000000000000000012 /* DesktopWidgetController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* DesktopWidgetController.swift */; };
 		A20000000000000000000013 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* SettingsView.swift */; };
@@ -32,6 +33,7 @@
 		A10000000000000000000005 /* VidgetYoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VidgetYoApp.swift; sourceTree = "<group>"; };
 		A10000000000000000000006 /* WidgetRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000008 /* GitHubReleaseUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubReleaseUpdate.swift; sourceTree = "<group>"; };
+		A10000000000000000000009 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000000000000000000007 /* VidgetYo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VidgetYo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000001 /* YozhkaFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YozhkaFlowTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* YozhkaStubURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YozhkaStubURLProtocol.swift; sourceTree = "<group>"; };
@@ -54,6 +56,7 @@
 			A10000000000000000000005 /* VidgetYoApp.swift */,
 			A10000000000000000000006 /* WidgetRootView.swift */,
 			A10000000000000000000008 /* GitHubReleaseUpdate.swift */,
+			A10000000000000000000009 /* Assets.xcassets */,
 		); path = VidgetYo; sourceTree = "<group>"; };
 		A20000000000000000000034 /* VidgetYoTests */ = {isa = PBXGroup; children = (A20000000000000000000001 /* YozhkaFlowTests.swift */, A20000000000000000000002 /* YozhkaStubURLProtocol.swift */, A20000000000000000000003 /* GitHubReleaseUpdateTests.swift */); path = VidgetYoTests; sourceTree = "<group>"; };
 		A10000000000000000000033 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000007 /* VidgetYo.app */, A20000000000000000000007 /* VidgetYoTests.xctest */); name = Products; sourceTree = "<group>"; };
@@ -69,7 +72,9 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A10000000000000000000043 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000043 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+			A10000000000000000000019 /* Assets.xcassets in Resources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -117,6 +122,7 @@
 			SWIFT_VERSION = 6.0;
 		}; name = Release; };
 		A10000000000000000000063 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
 			COMBINE_HIDPI_IMAGES = YES;
 			CURRENT_PROJECT_VERSION = 1;
@@ -137,6 +143,7 @@
 			SWIFT_VERSION = 6.0;
 		}; name = Debug; };
 		A10000000000000000000064 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 			CODE_SIGN_STYLE = Automatic;
 			COMBINE_HIDPI_IMAGES = YES;
 			CURRENT_PROJECT_VERSION = 1;

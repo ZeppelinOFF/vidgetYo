@@ -33,4 +33,29 @@ final class GitHubReleaseUpdateTests: XCTestCase {
             "VidgetYo-0.1.12-macOS27-arm64.dmg"
         )
     }
+
+    func testTaskDefaultsUseNameValueM() throws {
+        let json = #"""
+        [
+          {"groupValue":"Настройки задач","nameValueM":"global_setting.task.simple.default_type","settingIds":"2"},
+          {"groupValue":"Настройки задач","nameValueM":"global_setting.task.simple.default_hierarchy_level","settingIds":"2"},
+          {"groupValue":"Настройки задач","nameValueM":"global_setting.task.simple.default_priority","settingIds":"2"}
+        ]
+        """#.data(using: .utf8)!
+        let rows = try JSONSerialization.jsonObject(with: json) as? [[String: Any]]
+        XCTAssertEqual(rows?.count, 3)
+        var typeID: Int?
+        var hierarchyLevelID: Int?
+        var priorityID: Int?
+        for row in rows ?? [] {
+            let key = row["nameValueM"] as? String ?? ""
+            guard let raw = row["settingIds"] as? String, let value = Int(raw) else { continue }
+            if key.hasSuffix("default_type") { typeID = value }
+            if key.hasSuffix("default_hierarchy_level") { hierarchyLevelID = value }
+            if key.hasSuffix("default_priority") { priorityID = value }
+        }
+        XCTAssertEqual(typeID, 2)
+        XCTAssertEqual(hierarchyLevelID, 2)
+        XCTAssertEqual(priorityID, 2)
+    }
 }

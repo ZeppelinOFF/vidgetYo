@@ -160,8 +160,8 @@ final class YozhkaFlowTests: XCTestCase {
             if request.url?.path.hasSuffix("/globalSetting/list") == true {
                 return (200, Data(#"""
                 [
-                  {"groupValue":"global_setting.task.simple.default_type","settingIds":"3","settingValue":"Тип"},
-                  {"groupValue":"global_setting.task.simple.default_hierarchy_level","settingIds":"1","settingValue":"Уровень"}
+                  {"nameValueM":"global_setting.task.simple.default_type","settingIds":"3","settingValue":"Тип"},
+                  {"nameValueM":"global_setting.task.simple.default_hierarchy_level","settingIds":"1","settingValue":"Уровень"}
                 ]
                 """#.utf8))
             }
