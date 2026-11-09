@@ -24,10 +24,19 @@ struct WidgetRootView: View {
                 .strokeBorder(.white.opacity(0.2), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onAppear { model.controller?.fit(taskCount: model.visibleTasks.count) }
-        .onChange(of: model.visibleTasks.count) { _, count in
-            model.controller?.fit(taskCount: count)
-        }
+        .onAppear { refit() }
+        .onChange(of: model.visibleTasks.map(\.id)) { _, _ in refit() }
+        .onChange(of: model.columnID) { _, _ in refit() }
+        .onChange(of: model.showCompleted) { _, _ in refit() }
+        .onChange(of: model.isConnected) { _, _ in refit() }
+    }
+
+    private var showsOnboarding: Bool {
+        !model.isConnected && model.tasks.isEmpty
+    }
+
+    private func refit() {
+        model.controller?.fitToContent()
     }
 
     private var header: some View {
@@ -86,7 +95,7 @@ struct WidgetRootView: View {
 
     private var content: some View {
         Group {
-            if !model.isConnected && model.tasks.isEmpty {
+            if showsOnboarding {
                 emptyState
             } else if model.visibleTasks.isEmpty {
                 VStack(spacing: 8) {
@@ -96,20 +105,37 @@ struct WidgetRootView: View {
                     Text(emptyListTitle)
                         .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: WidgetMetrics.emptyList)
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(model.visibleTasks) { task in
-                            TaskRow(task: task)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 8)
-                }
+                taskList
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private var taskList: some View {
+        let tasks = model.visibleTasks
+        let maxHeight = model.controller?.screenMaxHeight() ?? 800
+        let capped = WidgetMetrics.isHeightCapped(taskCount: tasks.count, maxHeight: maxHeight)
+        let stack = LazyVStack(alignment: .leading, spacing: 2) {
+            ForEach(tasks) { task in
+                TaskRow(task: task)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+
+        return Group {
+            if capped {
+                ScrollView {
+                    stack
+                }
+                .frame(height: WidgetMetrics.cappedListHeight(maxHeight: maxHeight))
+            } else {
+                stack
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -128,7 +154,8 @@ struct WidgetRootView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(minHeight: WidgetMetrics.onboardingList)
     }
 
     private var composer: some View {

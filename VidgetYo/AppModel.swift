@@ -302,6 +302,7 @@ final class AppModel {
             columnTitle = ""
         }
         persistSettings()
+        controller?.fitToContent()
     }
 
     func refresh() async {
@@ -318,6 +319,7 @@ final class AppModel {
             lastError = nil
             lastUpdated = Date()
             cacheTasks()
+            controller?.fitToContent()
         } catch {
             await rememberTokens()
             await handle(error)

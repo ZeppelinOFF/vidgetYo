@@ -1,6 +1,37 @@
 import AppKit
 import SwiftUI
 
+enum WidgetMetrics {
+    static let header: CGFloat = 78
+    static let composer: CGFloat = 52
+    static let row: CGFloat = 58
+    static let listPadding: CGFloat = 16
+    static let emptyList: CGFloat = 72
+    static let onboardingList: CGFloat = 200
+    static let minWindow: CGFloat = 180
+    static let width: CGFloat = 320
+
+    static func listHeight(taskCount: Int, onboarding: Bool = false) -> CGFloat {
+        if onboarding { return onboardingList }
+        if taskCount == 0 { return emptyList }
+        return CGFloat(taskCount) * row + listPadding
+    }
+
+    static func desiredWindowHeight(taskCount: Int, maxHeight: CGFloat, onboarding: Bool = false) -> CGFloat {
+        let natural = header + listHeight(taskCount: taskCount, onboarding: onboarding) + composer
+        return min(max(natural, minWindow), maxHeight)
+    }
+
+    static func isHeightCapped(taskCount: Int, maxHeight: CGFloat, onboarding: Bool = false) -> Bool {
+        let natural = header + listHeight(taskCount: taskCount, onboarding: onboarding) + composer
+        return natural > maxHeight
+    }
+
+    static func cappedListHeight(maxHeight: CGFloat) -> CGFloat {
+        max(maxHeight - header - composer, emptyList)
+    }
+}
+
 @MainActor
 final class DesktopWidgetController: NSObject, NSWindowDelegate {
     private let model: AppModel
@@ -25,6 +56,7 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
 
     func show() {
         let panel = ensurePanel()
+        fitToContent()
         applyLevel()
         panel.orderFrontRegardless()
     }
@@ -33,17 +65,28 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
         panel?.orderOut(nil)
     }
 
-    func fit(taskCount: Int) {
+    func screenMaxHeight() -> CGFloat {
+        let screen = panel?.screen ?? NSScreen.main
+        return (screen?.visibleFrame.height ?? 800) - 32
+    }
+
+    func fitToContent() {
+        let onboarding = !model.isConnected && model.tasks.isEmpty
+        fit(taskCount: model.visibleTasks.count, onboarding: onboarding)
+    }
+
+    func fit(taskCount: Int, onboarding: Bool = false) {
         guard let panel else { return }
         let screen = panel.screen ?? NSScreen.main
-        let maxHeight = (screen?.visibleFrame.height ?? 800) - 32
-        let header: CGFloat = 78
-        let composer: CGFloat = 52
-        let row: CGFloat = 58
-        let list = taskCount == 0 ? 72 : CGFloat(taskCount) * row + 16
-        let height = min(max(header + list + composer, 180), maxHeight)
+        let maxHeight = screenMaxHeight()
+        let height = WidgetMetrics.desiredWindowHeight(
+            taskCount: taskCount,
+            maxHeight: maxHeight,
+            onboarding: onboarding
+        )
         var frame = panel.frame
         let top = frame.maxY
+        frame.size.width = WidgetMetrics.width
         frame.size.height = height
         frame.origin.y = top - height
         if let visible = screen?.visibleFrame {
@@ -90,6 +133,7 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
         hosting.layer?.isOpaque = false
         panel.contentView = hosting
         self.panel = panel
+        fitToContent()
         return panel
     }
 
@@ -109,7 +153,7 @@ final class DesktopWidgetController: NSObject, NSWindowDelegate {
 
     private func initialFrame() -> NSRect {
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let size = NSSize(width: 320, height: 520)
+        let size = NSSize(width: WidgetMetrics.width, height: WidgetMetrics.minWindow)
         var frame = NSRect(
             x: screen.maxX - size.width - 20,
             y: screen.minY + 20,
