@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import SwiftUI
 
 enum OriginStore {
     static let key = "vidgetyo.origin"
@@ -38,6 +39,9 @@ final class AppModel {
         static let visible = "vidgetyo.widgetVisible"
         static let cache = "vidgetyo.cachedTasks"
         static let checkUpdatesOnLaunch = "vidgetyo.checkUpdatesOnLaunch"
+        static let widgetPanelOpacity = "vidgetyo.widgetPanelOpacity"
+        static let widgetBackground = "vidgetyo.widgetBackground"
+        static let widgetText = "vidgetyo.widgetText"
     }
 
     private let defaults: UserDefaults
@@ -115,6 +119,58 @@ final class AppModel {
         }
     }
 
+    var widgetPanelOpacity: Double {
+        didSet {
+            let clamped = min(1, max(0.12, widgetPanelOpacity))
+            if clamped != widgetPanelOpacity {
+                widgetPanelOpacity = clamped
+                return
+            }
+            guard widgetPanelOpacity != oldValue else { return }
+            persistSettings()
+        }
+    }
+
+    private var widgetBackgroundRGB: (Double, Double, Double) {
+        didSet { persistSettings() }
+    }
+
+    private var widgetTextRGB: (Double, Double, Double) {
+        didSet { persistSettings() }
+    }
+
+    var widgetBackgroundColor: Color {
+        get { ColorStorage.color(from: widgetBackgroundRGB) }
+        set {
+            guard let rgb = ColorStorage.rgb(from: newValue) else { return }
+            widgetBackgroundRGB = rgb
+        }
+    }
+
+    var widgetTextColor: Color {
+        get { ColorStorage.color(from: widgetTextRGB) }
+        set {
+            guard let rgb = ColorStorage.rgb(from: newValue) else { return }
+            widgetTextRGB = rgb
+        }
+    }
+
+    var widgetAppearance: WidgetAppearanceConfig {
+        WidgetAppearanceConfig(
+            panelOpacity: widgetPanelOpacity,
+            background: widgetBackgroundColor,
+            text: widgetTextColor
+        )
+    }
+
+    func resetWidgetAppearance() {
+        let d = WidgetAppearanceConfig.defaults
+        widgetPanelOpacity = d.panelOpacity
+        widgetBackgroundRGB = ColorStorage.rgb(from: d.background) ?? (0.32, 0.32, 0.36)
+        widgetTextRGB = ColorStorage.rgb(from: d.text) ?? (1, 1, 1)
+        persistSettings()
+    }
+
     weak var controller: DesktopWidgetController?
 
     var isLoggedIn: Bool {
@@ -183,6 +239,21 @@ final class AppModel {
         } else {
             checkUpdatesOnLaunch = true
         }
+        if defaults.object(forKey: Keys.widgetPanelOpacity) != nil {
+            widgetPanelOpacity = defaults.double(forKey: Keys.widgetPanelOpacity)
+        } else {
+            widgetPanelOpacity = WidgetAppearanceConfig.defaults.panelOpacity
+        }
+        widgetBackgroundRGB = ColorStorage.loadRGB(
+            prefix: Keys.widgetBackground,
+            in: defaults,
+            fallback: (0.32, 0.32, 0.36)
+        )
+        widgetTextRGB = ColorStorage.loadRGB(
+            prefix: Keys.widgetText,
+            in: defaults,
+            fallback: (1, 1, 1)
+        )
         if let data = defaults.data(forKey: Keys.cache),
            let cached = try? JSONDecoder().decode([TaskItem].self, from: data) {
             tasks = cached
@@ -593,6 +664,9 @@ final class AppModel {
         defaults.set(showCompleted, forKey: Keys.showCompleted)
         defaults.set(widgetVisible, forKey: Keys.visible)
         defaults.set(checkUpdatesOnLaunch, forKey: Keys.checkUpdatesOnLaunch)
+        defaults.set(widgetPanelOpacity, forKey: Keys.widgetPanelOpacity)
+        ColorStorage.saveRGB(widgetBackgroundRGB, prefix: Keys.widgetBackground, in: defaults)
+        ColorStorage.saveRGB(widgetTextRGB, prefix: Keys.widgetText, in: defaults)
     }
 
     private func persistTokens() {

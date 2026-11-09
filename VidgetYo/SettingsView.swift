@@ -96,6 +96,25 @@ private struct SettingsForm: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Оформление") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Slider(value: $model.widgetPanelOpacity, in: 0.15...1) {
+                        Text("Прозрачность фона")
+                    }
+                    Text("Непрозрачность \(Int(model.widgetPanelOpacity * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ColorPicker("Цвет фона", selection: backgroundColorBinding)
+                ColorPicker("Цвет текста", selection: textColorBinding)
+                Button("Сбросить оформление") {
+                    model.resetWidgetAppearance()
+                }
+                Text("Чем прозрачнее фон, тем плотнее шрифт и сильнее контраст текста на виджете.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Обновления") {
                 LabeledContent("Версия") {
                     Text(model.appVersion)
@@ -140,6 +159,20 @@ private struct SettingsForm: View {
         .formStyle(.grouped)
         .padding(12)
         .frame(width: 480)
+    }
+
+    private var backgroundColorBinding: Binding<Color> {
+        Binding(
+            get: { model.widgetBackgroundColor },
+            set: { model.widgetBackgroundColor = $0 }
+        )
+    }
+
+    private var textColorBinding: Binding<Color> {
+        Binding(
+            get: { model.widgetTextColor },
+            set: { model.widgetTextColor = $0 }
+        )
     }
 
     private var workspaceSelection: Binding<Int> {

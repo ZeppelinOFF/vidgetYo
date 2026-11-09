@@ -6,22 +6,33 @@ struct WidgetRootView: View {
     @State private var draft = ""
     @FocusState private var draftFocused: Bool
 
+    private var typography: WidgetTypography {
+        model.widgetAppearance.typography
+    }
+
     var body: some View {
+        let appearance = model.widgetAppearance
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().opacity(0.35)
+            Divider().background(typography.tertiary.opacity(0.35))
             content
-            Divider().opacity(0.35)
+            Divider().background(typography.tertiary.opacity(0.35))
             composer
         }
+        .foregroundStyle(typography.primary)
         .background {
             WindowDragArea()
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
+            ZStack {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.35 + appearance.panelOpacity * 0.65)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(appearance.background.opacity(appearance.panelOpacity))
+            }
         }
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(.white.opacity(0.2), lineWidth: 1)
+                .strokeBorder(typography.primary.opacity(0.16 + appearance.panelOpacity * 0.12), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .onAppear { refit() }
@@ -45,11 +56,13 @@ struct WidgetRootView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.projectTitle.isEmpty ? "Ёжка" : model.projectTitle)
-                    .font(.headline)
+                    .font(.headline.weight(typography.weight))
+                    .widgetReadableText(typography)
                     .lineLimit(2)
                 Text(model.columnTitle.isEmpty ? "Все колонки" : model.columnTitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(typography.weight))
+                    .foregroundStyle(typography.secondary)
+                    .widgetReadableText(typography)
                     .lineLimit(1)
                 if let lastError = model.lastError {
                     Text(lastError)
@@ -62,9 +75,10 @@ struct WidgetRootView: View {
             Spacer(minLength: 8)
                 .allowsHitTesting(false)
             Text("\(model.openCount)")
-                .font(.title2.weight(.semibold))
+                .font(.title2.weight(typography.weight == .regular ? .semibold : typography.weight))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(typography.secondary)
+                .widgetReadableText(typography)
                 .allowsHitTesting(false)
             if model.isRefreshing {
                 ProgressView()
@@ -74,6 +88,7 @@ struct WidgetRootView: View {
                     Task { await model.refresh() }
                 } label: {
                     Image(systemName: "arrow.clockwise")
+                        .foregroundStyle(typography.secondary)
                 }
                 .buttonStyle(.plain)
                 .disabled(!model.isConnected)
@@ -83,6 +98,7 @@ struct WidgetRootView: View {
                 model.presentSettings()
             } label: {
                 Image(systemName: "gearshape")
+                    .foregroundStyle(typography.secondary)
             }
             .buttonStyle(.plain)
             .help("Настройки")
@@ -101,9 +117,10 @@ struct WidgetRootView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "checkmark.circle")
                         .font(.title2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(typography.secondary)
                     Text(emptyListTitle)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(typography.secondary)
+                        .widgetReadableText(typography)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: WidgetMetrics.emptyList)
@@ -141,12 +158,14 @@ struct WidgetRootView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.isLoggedIn ? "Выберите доску" : "Войдите в Ёжку")
-                .font(.headline)
+                .font(.headline.weight(typography.weight))
+                .widgetReadableText(typography)
             Text(model.isLoggedIn
                  ? "Сначала пространство, затем проект. Виджет покажет задачи этой доски."
                  : "При первом запуске нужны почта и пароль с yozhka.lukit.ru. Адрес подключения не меняется.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(typography.secondary)
+                .widgetReadableText(typography)
                 .fixedSize(horizontal: false, vertical: true)
             Button(model.isLoggedIn ? "Выбрать доску" : "Войти") {
                 model.presentSettings()
@@ -162,6 +181,9 @@ struct WidgetRootView: View {
         HStack(spacing: 8) {
             TextField("Новая задача", text: $draft)
                 .textFieldStyle(.plain)
+                .foregroundStyle(typography.primary)
+                .fontWeight(typography.weight)
+                .widgetReadableText(typography)
                 .focused($draftFocused)
                 .disabled(!model.isConnected)
                 .onSubmit { submit() }
@@ -217,6 +239,10 @@ private struct TaskRow: View {
     @Environment(AppModel.self) private var model
     let task: TaskItem
 
+    private var typography: WidgetTypography {
+        model.widgetAppearance.typography
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Button {
@@ -224,7 +250,7 @@ private struct TaskRow: View {
             } label: {
                 Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
-                    .foregroundStyle(task.done ? Color.accentColor : .secondary)
+                    .foregroundStyle(task.done ? Color.accentColor : typography.secondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -232,14 +258,16 @@ private struct TaskRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
-                    .font(.body)
+                    .font(.body.weight(typography.weight))
                     .strikethrough(task.done)
-                    .foregroundStyle(task.done ? .secondary : .primary)
+                    .foregroundStyle(task.done ? typography.secondary : typography.primary)
+                    .widgetReadableText(typography)
                     .lineLimit(2)
                 if let caption = taskCaption(task) {
                     Text(caption.text)
-                        .font(.caption)
-                        .foregroundStyle(caption.overdue && !task.done ? Color.orange : .secondary)
+                        .font(.caption.weight(typography.weight))
+                        .foregroundStyle(caption.overdue && !task.done ? Color.orange : typography.secondary)
+                        .widgetReadableText(typography)
                         .lineLimit(1)
                 }
             }
@@ -252,7 +280,7 @@ private struct TaskRow: View {
             if task.url != nil {
                 Image(systemName: "arrow.up.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(typography.tertiary)
             }
         }
         .padding(.horizontal, 6)
